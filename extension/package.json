@@ -1,0 +1,172 @@
+{
+  "name": "toolhub",
+  "displayName": "ToolHub",
+  "description": "Internal developer tool sync platform — browse, install, and publish extensions, skills, agents, and instructions",
+  "version": "0.1.0",
+  "publisher": "toolhub",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "main": "./out/extension.js",
+  "icon": "resources/icon.png",
+  "categories": ["Other"],
+  "keywords": ["tools", "extensions", "skills", "agents", "internal"],
+  "license": "MIT",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "toolhub",
+          "title": "ToolHub",
+          "icon": "resources/toolhub.svg"
+        }
+      ]
+    },
+    "views": {
+      "toolhub": [
+        {
+          "id": "toolhubExplorer",
+          "name": "ToolHub",
+          "icon": "resources/toolhub.svg",
+          "contextualTitle": "ToolHub"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "toolhubExplorer",
+        "contents": "No registries configured yet.\n[Add Registry](command:toolhub.addRegistry)\n[Learn More](https://github.com/toolhub)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "toolhub.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "toolhub.filter",
+        "title": "Filter",
+        "icon": "$(search)"
+      },
+      {
+        "command": "toolhub.install",
+        "title": "Install",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "toolhub.update",
+        "title": "Update",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "toolhub.uninstall",
+        "title": "Uninstall",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "toolhub.viewDetails",
+        "title": "View Details"
+      },
+      {
+        "command": "toolhub.copyId",
+        "title": "Copy Resource ID"
+      },
+      {
+        "command": "toolhub.publish",
+        "title": "Publish Resource",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "toolhub.addRegistry",
+        "title": "Add Registry"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "toolhub.filter",
+          "when": "view == toolhubExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "toolhub.refresh",
+          "when": "view == toolhubExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "toolhub.publish",
+          "when": "view == toolhubExplorer",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "toolhub.install",
+          "when": "view == toolhubExplorer && viewItem == available",
+          "group": "inline@1"
+        },
+        {
+          "command": "toolhub.update",
+          "when": "view == toolhubExplorer && viewItem == updatable",
+          "group": "inline@1"
+        },
+        {
+          "command": "toolhub.uninstall",
+          "when": "view == toolhubExplorer && viewItem =~ /^(installed|updatable)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "toolhub.viewDetails",
+          "when": "view == toolhubExplorer && viewItem =~ /^(installed|available|updatable)$/"
+        },
+        {
+          "command": "toolhub.copyId",
+          "when": "view == toolhubExplorer && viewItem =~ /^(installed|available|updatable)$/"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "ToolHub",
+      "properties": {
+        "toolhub.registries": {
+          "type": "array",
+          "default": [],
+          "description": "List of ToolHub registries",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "Display name" },
+              "url": { "type": "string", "description": "Server URL (e.g. https://toolhub.example.com)" }
+            }
+          }
+        },
+        "toolhub.updateInterval": {
+          "type": "number",
+          "default": 360,
+          "description": "Update check interval in minutes"
+        },
+        "toolhub.autoUpdate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically install available updates"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3",
+    "@vscode/vsce": "^3.4.1"
+  },
+  "dependencies": {
+    "marked": "^15.0.12"
+  }
+}

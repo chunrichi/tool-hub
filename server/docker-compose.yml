@@ -1,0 +1,15 @@
+services:
+  toolhub:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./content:/app/content
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      - CONTENT_DIR=/app/content
+      - DATA_DIR=/app/data
+      - PUBLISH_TOKEN=${PUBLISH_TOKEN}
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
+    restart: unless-stopped
