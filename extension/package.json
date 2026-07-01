@@ -9,8 +9,16 @@
   },
   "main": "./out/extension.js",
   "icon": "resources/icon.png",
-  "categories": ["Other"],
-  "keywords": ["tools", "extensions", "skills", "agents", "internal"],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "tools",
+    "extensions",
+    "skills",
+    "agents",
+    "internal"
+  ],
   "license": "MIT",
   "contributes": {
     "viewsContainers": {
@@ -80,6 +88,11 @@
       {
         "command": "toolhub.addRegistry",
         "title": "Add Registry"
+      },
+      {
+        "command": "toolhub.manageRegistries",
+        "title": "Manage Registries",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -136,8 +149,14 @@
           "items": {
             "type": "object",
             "properties": {
-              "name": { "type": "string", "description": "Display name" },
-              "url": { "type": "string", "description": "Server URL (e.g. https://toolhub.example.com)" }
+              "name": {
+                "type": "string",
+                "description": "Display name"
+              },
+              "url": {
+                "type": "string",
+                "description": "Server URL (e.g. https://toolhub.example.com)"
+              }
             }
           }
         },
@@ -161,12 +180,13 @@
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
-    "@types/vscode": "^1.80.0",
+    "@types/marked": "^4.3.2",
     "@types/node": "^22.15.3",
-    "typescript": "^5.8.3",
-    "@vscode/vsce": "^3.4.1"
+    "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^3.4.1",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "marked": "^15.0.12"
+    "marked": "^4.3.0"
   }
 }

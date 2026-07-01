@@ -1,0 +1,8 @@
+{
+  "toolhub.registries": [
+    {
+      "name": "Local Dev",
+      "url": "http://localhost:3000"
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 .vscode/**
 src/**
 tsconfig.json
-node_modules/**
 **/*.ts
 !out/**
+node_modules/**/test/**
+node_modules/**/@types/**
+node_modules/.package-lock.json

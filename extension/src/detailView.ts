@@ -48,10 +48,10 @@ export class DetailView {
 
     const actionButton =
       resource.status === 'updatable'
-        ? `<button class="btn btn-primary" onclick="doAction('update')">Update to v${resource.meta.version}</button>`
+        ? `<button class="btn btn-primary" id="actionBtn" data-action="update">Update to v${resource.meta.version}</button>`
         : resource.status === 'available'
-          ? `<button class="btn btn-primary" onclick="doAction('install')">Install v${resource.meta.version}</button>`
-          : `<button class="btn btn-secondary" onclick="doAction('uninstall')">Uninstall</button>`
+          ? `<button class="btn btn-primary" id="actionBtn" data-action="install">Install v${resource.meta.version}</button>`
+          : `<button class="btn btn-secondary" id="actionBtn" data-action="uninstall">Uninstall</button>`
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -130,9 +130,8 @@ export class DetailView {
   <div class="actions">${actionButton}</div>
 
   <div class="tabs">
-    <div class="tab active" onclick="showTab('description')">Description</div>
-    <div class="tab" onclick="showTab('details')">Details</div>
-  </div>
+    <div class="tab active" data-tab="description">Description</div>
+    <div class="tab" data-tab="details">Details</div>
 
   <div id="description" class="content active">${description}</div>
 
@@ -149,13 +148,19 @@ export class DetailView {
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    function doAction(type) { vscode.postMessage({ type }); }
-    function showTab(id) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
-      event.target.classList.add('active');
-      document.getElementById(id).classList.add('active');
-    }
+
+    document.getElementById('actionBtn').addEventListener('click', function() {
+      vscode.postMessage({ type: this.getAttribute('data-action') });
+    });
+
+    document.querySelectorAll('.tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.content').forEach(function(c) { c.classList.remove('active'); });
+        this.classList.add('active');
+        document.getElementById(this.getAttribute('data-tab')).classList.add('active');
+      });
+    });
   </script>
 </body>
 </html>`

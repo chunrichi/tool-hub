@@ -2,14 +2,33 @@ import * as vscode from 'vscode'
 import { ToolHubProvider, ResourceTreeItem } from './treeView'
 import { DetailView } from './detailView'
 import { PublishView } from './publishView'
+import { RegistryView } from './registryView'
 import { StatusBarManager } from './statusBar'
 import { ToolHubDecorationProvider } from './decorationProvider'
 import { loadResources, refreshUpdateStatus, installResource, uninstallResource } from './manager'
 import { startUpdateChecker } from './updater'
-import { getRegistries } from './config'
+import { getRegistries, setExtensionContext } from './config'
 import type { ResourceItem } from './types'
 
+let log: vscode.OutputChannel
+
 export function activate(context: vscode.ExtensionContext) {
+  log = vscode.window.createOutputChannel('ToolHub')
+  context.subscriptions.push(log)
+  log.appendLine('[activate] Extension activating...')
+
+  try {
+    doActivate(context)
+    log.appendLine('[activate] Extension activated successfully')
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log.appendLine(`[activate] FATAL ERROR: ${msg}`)
+    vscode.window.showErrorMessage(`ToolHub activation failed: ${msg}`)
+  }
+}
+
+function doActivate(context: vscode.ExtensionContext) {
+  setExtensionContext(context)
   const provider = new ToolHubProvider()
   const statusBar = new StatusBarManager()
   const decorationProvider = new ToolHubDecorationProvider()
@@ -28,6 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   async function refreshAll(): Promise<void> {
     const registries = getRegistries()
+    log.appendLine(`[refreshAll] Found ${registries.length} registries`)
     if (registries.length === 0) {
       provider.setItems([])
       treeView.badge = undefined
@@ -159,26 +179,15 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('toolhub.addRegistry', async () => {
-      const name = await vscode.window.showInputBox({
-        prompt: 'Registry display name',
-        placeHolder: 'My Company',
-      })
-      if (!name) return
+    vscode.commands.registerCommand('toolhub.addRegistry', () => {
+      log.appendLine('[command] addRegistry triggered')
+      RegistryView.show()
+    })
+  )
 
-      const url = await vscode.window.showInputBox({
-        prompt: 'Registry URL',
-        placeHolder: 'https://toolhub.example.com',
-      })
-      if (!url) return
-
-      const config = vscode.workspace.getConfiguration('toolhub')
-      const registries = config.get<{ name: string; url: string }[]>('registries', [])
-      registries.push({ name, url })
-      await config.update('registries', registries, vscode.ConfigurationTarget.Global)
-
-      vscode.window.showInformationMessage(`Registry "${name}" added`)
-      await refreshAll()
+  context.subscriptions.push(
+    vscode.commands.registerCommand('toolhub.manageRegistries', () => {
+      RegistryView.show()
     })
   )
 
