@@ -4,24 +4,26 @@ import { DetailView } from './detailView'
 import { PublishView } from './publishView'
 import { RegistryView } from './registryView'
 import { StatusBarManager } from './statusBar'
-import { loadResources, refreshUpdateStatus, installResource, uninstallResource } from './manager'
+import { loadResources, refreshUpdateStatus, installResource, uninstallResource, type InstallScope } from './manager'
 import { startUpdateChecker } from './updater'
 import { getRegistries, setExtensionContext } from './config'
+import { initLogger, log } from './logger'
 import type { ResourceItem } from './types'
 
-let log: vscode.OutputChannel
+let outputChannel: vscode.OutputChannel
 
 export function activate(context: vscode.ExtensionContext) {
-  log = vscode.window.createOutputChannel('ToolHub')
-  context.subscriptions.push(log)
-  log.appendLine('[activate] Extension activating...')
+  outputChannel = vscode.window.createOutputChannel('ToolHub')
+  initLogger(outputChannel)
+  context.subscriptions.push(outputChannel)
+  log('[activate] Extension activating...')
 
   try {
     doActivate(context)
-    log.appendLine('[activate] Extension activated successfully')
+    log('[activate] Extension activated successfully')
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    log.appendLine(`[activate] FATAL ERROR: ${msg}`)
+    log(`[activate] FATAL ERROR: ${msg}`)
     vscode.window.showErrorMessage(`ToolHub activation failed: ${msg}`)
   }
 }
@@ -43,7 +45,7 @@ function doActivate(context: vscode.ExtensionContext) {
 
   async function refreshAll(): Promise<void> {
     const registries = getRegistries()
-    log.appendLine(`[refreshAll] Found ${registries.length} registries`)
+    log(`[refreshAll] Found ${registries.length} registries`)
     if (registries.length === 0) {
       sidebarView.setItems([])
       statusBar.hide()
@@ -90,12 +92,43 @@ function doActivate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.install', async (item?: ResourceItem) => {
+      log(`[install] Command triggered, item: ${item?.meta.name || 'undefined'}`)
       if (!item) return
+
+      // Extensions always install globally
+      if (item.meta.type === 'extension') {
+        try {
+          statusBar.showProgress(`Installing ${item.meta.displayName}...`)
+          await installResource(item, 'user')
+          const msg = `Installed ${item.meta.displayName} v${item.meta.version}`
+          log(`[install] ${msg}`)
+          vscode.window.showInformationMessage(msg, 'OK')
+          await refreshAll()
+        } catch (err) {
+          vscode.window.showErrorMessage(`Install failed: ${err instanceof Error ? err.message : String(err)}`)
+        }
+        return
+      }
+
+      // For skill/agent/instruction: ask scope
+      // Small delay to let webview release focus so QuickPick appears
+      await new Promise((r) => setTimeout(r, 200))
+      const wsPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+      const scopePick = await vscode.window.showQuickPick(
+        [
+          { label: 'Workspace', description: wsPath ? `.copilot/ in ${wsPath.split('/').pop()}` : 'Current workspace', scope: 'workspace' as InstallScope },
+          { label: 'User', description: '~/.agents/, ~/.copilot/ (global)', scope: 'user' as InstallScope },
+        ],
+        { placeHolder: `Select install scope for ${item.meta.displayName}` }
+      )
+      if (!scopePick) return
 
       try {
         statusBar.showProgress(`Installing ${item.meta.displayName}...`)
-        await installResource(item)
-        vscode.window.showInformationMessage(`Installed ${item.meta.displayName} v${item.meta.version}`)
+        await installResource(item, scopePick.scope)
+        const msg = `Installed ${item.meta.displayName} v${item.meta.version} (${scopePick.label})`
+        log(`[install] ${msg}`)
+        vscode.window.showInformationMessage(msg, 'OK')
         await refreshAll()
       } catch (err) {
         vscode.window.showErrorMessage(`Install failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -123,7 +156,9 @@ function doActivate(context: vscode.ExtensionContext) {
 
       try {
         await uninstallResource(item)
-        vscode.window.showInformationMessage(`Uninstalled ${item.meta.displayName}`)
+        const msg = `Uninstalled ${item.meta.displayName}`
+        log(`[uninstall] ${msg}`)
+        vscode.window.showInformationMessage(msg)
         await refreshAll()
       } catch (err) {
         vscode.window.showErrorMessage(`Uninstall failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -154,7 +189,7 @@ function doActivate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.addRegistry', () => {
-      log.appendLine('[command] addRegistry triggered')
+      log('[command] addRegistry triggered')
       RegistryView.show()
     })
   )

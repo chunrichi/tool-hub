@@ -2,6 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import multer from 'multer'
 import path from 'node:path'
 import fs from 'node:fs'
+import archiver from 'archiver'
 import semver from 'semver'
 import { config } from './config.js'
 import { getCatalog, upsertResource } from './storage.js'
@@ -49,7 +50,31 @@ apiRouter.get('/download/:type/:id/:version', (req: Request, res: Response) => {
     return
   }
 
-  res.download(filePath, item.fileName)
+  const stat = fs.statSync(filePath)
+
+  // If it's a file (e.g. .vsix), send directly
+  if (stat.isFile()) {
+    res.download(filePath, item.fileName)
+    return
+  }
+
+  // If it's a directory (skill/agent/instruction), create zip on the fly
+  if (stat.isDirectory()) {
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="${item.fileName}.zip"`)
+
+    const archive = archiver('zip', { zlib: { level: 9 } })
+    archive.on('error', (err) => {
+      res.status(500).json({ error: 'Archive failed' })
+    })
+    archive.pipe(res)
+    archive.directory(filePath, item.fileName)
+    archive.finalize()
+    return
+  }
+
+  const response: ApiResponse = { error: 'Unsupported file type' }
+  res.status(400).json(response)
 })
 
 // POST /api/publish — upload resource (requires auth)

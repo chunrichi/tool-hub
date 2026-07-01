@@ -2,10 +2,10 @@ import * as vscode from 'vscode'
 import type { ResourceItem, ContentType } from './types'
 
 const TYPE_ICONS: Record<ContentType, string> = {
-  extension: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,
-  skill: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.5 4.5-3 6s-2 3-2 5h-4c0-2-.5-3.5-2-5s-3-3.5-3-6a7 7 0 0 1 7-7z"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/></svg>`,
-  agent: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
-  instruction: `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+  extension: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,
+  skill: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.5 4.5-3 6s-2 3-2 5h-4c0-2-.5-3.5-2-5s-3-3.5-3-6a7 7 0 0 1 7-7z"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/></svg>`,
+  agent: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
+  instruction: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
 }
 
 const TYPE_COLORS: Record<ContentType, string> = {
@@ -37,9 +37,16 @@ export class SidebarView implements vscode.WebviewViewProvider {
 
     webviewView.webview.onDidReceiveMessage(async (msg) => {
       if (msg.type === 'install' || msg.type === 'update') {
-        vscode.commands.executeCommand('toolhub.install', this._items.find((i) => i.meta.name === msg.id))
+        const item = this._items.find((i) => i.meta.name === msg.id)
+        console.log(`[Sidebar] ${msg.type} requested for: ${msg.id}, found: ${!!item}`)
+        if (item) {
+          vscode.commands.executeCommand('toolhub.install', item)
+        }
       } else if (msg.type === 'uninstall') {
-        vscode.commands.executeCommand('toolhub.uninstall', this._items.find((i) => i.meta.name === msg.id))
+        const item = this._items.find((i) => i.meta.name === msg.id)
+        if (item) {
+          vscode.commands.executeCommand('toolhub.uninstall', item)
+        }
       } else if (msg.type === 'viewDetails') {
         vscode.commands.executeCommand('toolhub.viewDetails', this._items.find((i) => i.meta.name === msg.id))
       } else if (msg.type === 'filter') {
@@ -149,15 +156,15 @@ export class SidebarView implements vscode.WebviewViewProvider {
 
     /* ── Item (matches official Extensions layout) ── */
     .item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 10px 6px 20px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px 8px 20px; cursor: pointer;
     }
     .item:hover { background: var(--vscode-list-activeSelectionBackground); }
     .item-icon {
-      width: 32px; height: 32px; border-radius: 4px; flex-shrink: 0;
+      width: 48px; height: 48px; border-radius: 6px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
     }
-    .item-icon svg { width: 20px; height: 20px; }
+    .item-icon svg { width: 32px; height: 32px; }
     .item-info { flex: 1; min-width: 0; }
     .item-row1 {
       display: flex; align-items: baseline; gap: 6px;
@@ -167,13 +174,13 @@ export class SidebarView implements vscode.WebviewViewProvider {
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .item-publisher {
-      font-size: 11px; color: var(--vscode-descriptionForeground);
+      font-size: 12px; color: var(--vscode-descriptionForeground);
       white-space: nowrap;
     }
     .item-row2 {
-      font-size: 11px; color: var(--vscode-descriptionForeground);
+      font-size: 12px; color: var(--vscode-descriptionForeground);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      margin-top: 1px;
+      margin-top: 2px;
     }
     .item-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
 

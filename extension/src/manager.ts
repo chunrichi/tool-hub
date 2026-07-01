@@ -2,9 +2,11 @@ import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
+import JSZip from 'jszip'
 import type { ResourceItem, ResourceMeta, InstallStatus, ContentType } from './types'
 import { getRegistries } from './config'
 import { fetchCatalog, checkUpdates } from './api'
+import { log } from './logger'
 
 export async function loadResources(): Promise<ResourceItem[]> {
   const registries = getRegistries()
@@ -77,7 +79,7 @@ export async function refreshUpdateStatus(items: ResourceItem[]): Promise<number
   return updateCount
 }
 
-export async function installResource(item: ResourceItem): Promise<void> {
+export async function installResource(item: ResourceItem, scope: InstallScope = 'workspace'): Promise<void> {
   const registries = getRegistries()
   const registry = registries.find((r) => r.name === item.registryName)
   if (!registry) throw new Error('Registry not found')
@@ -89,35 +91,43 @@ export async function installResource(item: ResourceItem): Promise<void> {
 
   const buffer = Buffer.from(await res.arrayBuffer())
 
+  // Determine install path for logging
+  let installPath = ''
   switch (item.meta.type) {
     case 'extension':
+      installPath = '(VS Code extensions directory)'
       await installExtension(buffer, item.meta)
       break
     case 'skill':
-      installToDir(buffer, getSkillDir(item.meta.name), item.meta)
+      installPath = getSkillDir(item.meta.name, scope)
+      await installToDir(buffer, installPath, item.meta)
       break
     case 'agent':
-      installFile(buffer, getAgentPath(item.meta.name))
+      installPath = getAgentPath(item.meta.name, scope)
+      await installFile(buffer, installPath)
       break
     case 'instruction':
-      installFile(buffer, getInstructionPath(item.meta.name))
+      installPath = getInstructionPath(item.meta.name, scope)
+      await installFile(buffer, installPath)
       break
   }
+
+  log(`[ToolHub] Installed ${item.meta.type} "${item.meta.displayName}" v${item.meta.version} → ${installPath}`)
 }
 
-export async function uninstallResource(item: ResourceItem): Promise<void> {
+export async function uninstallResource(item: ResourceItem, scope: InstallScope = 'workspace'): Promise<void> {
   switch (item.meta.type) {
     case 'extension':
       await uninstallExtension(item.meta.name)
       break
     case 'skill':
-      removeDir(getSkillDir(item.meta.name))
+      removeDir(getSkillDir(item.meta.name, scope))
       break
     case 'agent':
-      removeFile(getAgentPath(item.meta.name))
+      removeFile(getAgentPath(item.meta.name, scope))
       break
     case 'instruction':
-      removeFile(getInstructionPath(item.meta.name))
+      removeFile(getInstructionPath(item.meta.name, scope))
       break
   }
 }
@@ -140,29 +150,69 @@ async function uninstallExtension(name: string): Promise<void> {
 }
 
 // ── File-based install for skills/agents/instructions ──
-function getSkillDir(name: string): string {
+export type InstallScope = 'workspace' | 'user'
+
+function getSkillDir(name: string, scope: InstallScope): string {
+  if (scope === 'workspace') {
+    const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd()
+    return path.join(ws, '.copilot', 'skills', name)
+  }
   return path.join(os.homedir(), '.agents', 'skills', name)
 }
 
-function getAgentPath(name: string): string {
+function getAgentPath(name: string, scope: InstallScope): string {
+  if (scope === 'workspace') {
+    const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd()
+    return path.join(ws, '.copilot', 'agents', `${name}.agent.md`)
+  }
   return path.join(os.homedir(), '.copilot', 'agents', `${name}.agent.md`)
 }
 
-function getInstructionPath(name: string): string {
+function getInstructionPath(name: string, scope: InstallScope): string {
+  if (scope === 'workspace') {
+    const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || process.cwd()
+    return path.join(ws, '.copilot', `${name}.instructions.md`)
+  }
   return path.join(os.homedir(), '.copilot', `${name}.instructions.md`)
 }
 
-function installToDir(buffer: Buffer, dirPath: string, _meta: ResourceMeta): void {
-  // For zip files, we'd extract. For now, save directly
+async function installToDir(buffer: Buffer, dirPath: string, meta: ResourceMeta): Promise<void> {
+  // Server sends zip for directory-based resources
+  const zip = await JSZip.loadAsync(buffer)
   fs.mkdirSync(dirPath, { recursive: true })
-  const filePath = path.join(dirPath, `SKILL.md`)
-  fs.writeFileSync(filePath, buffer)
+
+  for (const [zipPath, file] of Object.entries(zip.files)) {
+    if (file.dir) continue
+    // Strip the top-level directory from zip path (e.g. "hello-world/SKILL.md" → "SKILL.md")
+    const parts = zipPath.split('/')
+    const relativePath = parts.length > 1 ? parts.slice(1).join('/') : zipPath
+    if (!relativePath) continue
+    const fullPath = path.join(dirPath, relativePath)
+    const fileDir = path.dirname(fullPath)
+    fs.mkdirSync(fileDir, { recursive: true })
+    const content = await file.async('nodebuffer')
+    fs.writeFileSync(fullPath, content)
+  }
 }
 
-function installFile(buffer: Buffer, filePath: string): void {
+async function installFile(buffer: Buffer, filePath: string): Promise<void> {
+  // Server sends zip for all directory-based resources
+  const zip = await JSZip.loadAsync(buffer)
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(filePath, buffer)
+
+  for (const [zipPath, file] of Object.entries(zip.files)) {
+    if (file.dir) continue
+    // Strip the top-level directory from zip path
+    const parts = zipPath.split('/')
+    const relativePath = parts.length > 1 ? parts.slice(1).join('/') : zipPath
+    if (!relativePath) continue
+    const fullPath = path.join(dir, relativePath)
+    const fileDir = path.dirname(fullPath)
+    fs.mkdirSync(fileDir, { recursive: true })
+    const content = await file.async('nodebuffer')
+    fs.writeFileSync(fullPath, content)
+  }
 }
 
 function removeDir(dirPath: string): void {
@@ -180,6 +230,7 @@ function removeFile(filePath: string): void {
 // ── Installed resources tracking ──
 function getInstalledResources(): Record<string, { version: string }> {
   const result: Record<string, { version: string }> = {}
+  log('[ToolHub] Scanning installed resources...')
 
   // Check VS Code extensions
   for (const ext of vscode.extensions.all) {
@@ -190,27 +241,70 @@ function getInstalledResources(): Record<string, { version: string }> {
     }
   }
 
-  // Check skills
-  const skillsDir = path.join(os.homedir(), '.agents', 'skills')
-  if (fs.existsSync(skillsDir)) {
-    for (const name of fs.readdirSync(skillsDir)) {
-      const versionFile = path.join(skillsDir, name, 'version.json')
+  // User-level directories
+  const userSkillsDir = path.join(os.homedir(), '.agents', 'skills')
+  if (fs.existsSync(userSkillsDir)) {
+    for (const name of fs.readdirSync(userSkillsDir)) {
+      const versionFile = path.join(userSkillsDir, name, 'version.json')
       if (fs.existsSync(versionFile)) {
         try {
           const meta = JSON.parse(fs.readFileSync(versionFile, 'utf-8'))
           result[`skill/${meta.name || name}`] = { version: meta.version }
+          log(`[ToolHub] Found user skill: ${meta.name || name}`)
         } catch { /* ignore */ }
       }
     }
   }
 
-  // Check agents
-  const agentsDir = path.join(os.homedir(), '.copilot', 'agents')
-  if (fs.existsSync(agentsDir)) {
-    for (const file of fs.readdirSync(agentsDir)) {
+  const userAgentsDir = path.join(os.homedir(), '.copilot', 'agents')
+  if (fs.existsSync(userAgentsDir)) {
+    for (const file of fs.readdirSync(userAgentsDir)) {
       if (file.endsWith('.agent.md')) {
         const name = file.replace('.agent.md', '')
         result[`agent/${name}`] = { version: '0.0.0' }
+        log(`[ToolHub] Found user agent: ${name}`)
+      }
+    }
+  }
+
+  // Workspace-level directories
+  const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  log(`[ToolHub] Workspace path: ${ws || 'none'}`)
+  if (ws) {
+    const wsSkillsDir = path.join(ws, '.copilot', 'skills')
+    log(`[ToolHub] Checking workspace skills dir: ${wsSkillsDir}, exists: ${fs.existsSync(wsSkillsDir)}`)
+    if (fs.existsSync(wsSkillsDir)) {
+      for (const name of fs.readdirSync(wsSkillsDir)) {
+        log(`[ToolHub] Found workspace skill dir: ${name}`)
+        const versionFile = path.join(wsSkillsDir, name, 'version.json')
+        const exists = fs.existsSync(versionFile)
+        log(`[ToolHub] version.json exists: ${exists}, path: ${versionFile}`)
+        if (exists) {
+          try {
+            const raw = fs.readFileSync(versionFile, 'utf-8')
+            log(`[ToolHub] version.json content: ${raw}`)
+            const meta = JSON.parse(raw)
+            result[`skill/${meta.name || name}`] = { version: meta.version }
+            log(`[ToolHub] Found workspace skill: ${meta.name || name} v${meta.version}`)
+          } catch (e) {
+            log(`[ToolHub] Error reading version.json: ${e}`)
+          }
+        } else {
+          // List files in the directory to debug
+          const files = fs.readdirSync(path.join(wsSkillsDir, name))
+          log(`[ToolHub] Files in ${name}: ${files.join(', ')}`)
+        }
+      }
+    }
+
+    const wsAgentsDir = path.join(ws, '.copilot', 'agents')
+    if (fs.existsSync(wsAgentsDir)) {
+      for (const file of fs.readdirSync(wsAgentsDir)) {
+        if (file.endsWith('.agent.md')) {
+          const name = file.replace('.agent.md', '')
+          result[`agent/${name}`] = { version: '0.0.0' }
+          log(`[ToolHub] Found workspace agent: ${name}`)
+        }
       }
     }
   }
