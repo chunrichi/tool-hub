@@ -1,11 +1,11 @@
 import * as vscode from 'vscode'
 import type { ResourceItem, ContentType, InstallStatus } from './types'
 
-// ── Type icons ──────────────────────────────────────────────
+// ── Type icons (standard VS Code ThemeIcon IDs) ─────────────
 const TYPE_ICONS: Record<ContentType, string> = {
   extension: 'extensions',
-  skill: 'brain',
-  agent: 'robot',
+  skill: 'lightbulb',
+  agent: 'person',
   instruction: 'note',
 }
 
@@ -21,31 +21,29 @@ export class CategoryTreeItem extends vscode.TreeItem {
       available: 'AVAILABLE',
     }
     super(labels[category], vscode.TreeItemCollapsibleState.Expanded)
-    this.description = `(${count})`
+    this.description = `${count}`
     this.contextValue = 'category'
-    this.iconPath = new vscode.ThemeIcon('package')
+    // VS Code Extensions view: plain text headers, no icon
   }
 }
 
 export class ResourceTreeItem extends vscode.TreeItem {
   constructor(public readonly resource: ResourceItem) {
+    // Label: display name (bold, main line)
     super(resource.meta.displayName, vscode.TreeItemCollapsibleState.None)
 
+    // Icon: every item must have an icon (ThemeIcon)
     const iconId = TYPE_ICONS[resource.meta.type]
     this.iconPath = new vscode.ThemeIcon(iconId)
 
-    // Description: version + publisher
-    const publisher = resource.meta.publisher || resource.registryName
-    if (resource.status === 'updatable') {
-      this.description = `${resource.installedVersion} → ${resource.meta.version} · ${publisher}`
-    } else {
-      this.description = `v${resource.meta.version} · ${publisher}`
-    }
+    // Description: publisher only (matches official Extensions view style)
+    // The official Extensions view shows "publisher" as description, not version
+    this.description = resource.meta.publisher || resource.registryName
 
     // contextValue drives menu visibility
     this.contextValue = resource.status
 
-    // Rich tooltip
+    // Rich tooltip with version and full details
     this.tooltip = buildTooltip(resource)
 
     // Click opens details
@@ -62,25 +60,33 @@ function buildTooltip(resource: ResourceItem): vscode.MarkdownString {
   md.isTrusted = true
   md.supportThemeIcons = true
 
-  md.appendMarkdown(`### ${resource.meta.displayName}\n\n`)
-  md.appendMarkdown(`**Type:** ${resource.meta.type}  \n`)
-  md.appendMarkdown(`**Name:** \`${resource.meta.name}\`  \n`)
-  md.appendMarkdown(`**Version:** ${resource.meta.version}  \n`)
-
-  if (resource.meta.publisher) {
-    md.appendMarkdown(`**Publisher:** ${resource.meta.publisher}  \n`)
-  }
+  // Title line: name + version
+  md.appendMarkdown(`**${resource.meta.displayName}** v${resource.meta.version}\n\n`)
 
   if (resource.meta.description) {
-    md.appendMarkdown(`\n${resource.meta.description}\n`)
+    md.appendMarkdown(`${resource.meta.description}\n\n`)
   }
 
+  md.appendMarkdown(`---\n\n`)
+  md.appendMarkdown(`| | |\n|---|---|\n`)
+  md.appendMarkdown(`| **Type** | ${resource.meta.type} |\n`)
+  md.appendMarkdown(`| **Id** | \`${resource.meta.name}\` |\n`)
+  md.appendMarkdown(`| **Version** | ${resource.meta.version} |\n`)
+
+  if (resource.meta.publisher) {
+    md.appendMarkdown(`| **Publisher** | ${resource.meta.publisher} |\n`)
+  }
+
+  md.appendMarkdown(`| **Registry** | ${resource.registryName} |\n`)
+
   if (resource.meta.tags.length > 0) {
-    md.appendMarkdown(`\n**Tags:** ${resource.meta.tags.join(', ')}\n`)
+    md.appendMarkdown(`| **Tags** | ${resource.meta.tags.join(', ')} |\n`)
   }
 
   if (resource.status === 'updatable' && resource.installedVersion) {
-    md.appendMarkdown(`\n---\n*Update available: ${resource.installedVersion} → ${resource.meta.version}*`)
+    md.appendMarkdown(`\n---\n$(arrow-up) **Update available:** ${resource.installedVersion} → ${resource.meta.version}`)
+  } else if (resource.status === 'installed') {
+    md.appendMarkdown(`\n---\n$(check) **Installed**`)
   }
 
   return md

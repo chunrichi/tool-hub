@@ -1,6 +1,27 @@
 import * as vscode from 'vscode'
 import { marked } from 'marked'
-import type { ResourceItem } from './types'
+import type { ResourceItem, ContentType } from './types'
+
+const TYPE_SVGS: Record<ContentType, string> = {
+  extension: '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+  skill: '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.5 4.5-3 6s-2 3-2 5h-4c0-2-.5-3.5-2-5s-3-3.5-3-6a7 7 0 0 1 7-7z"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/></svg>',
+  agent: '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>',
+  instruction: '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+}
+
+const TYPE_COLORS: Record<ContentType, string> = {
+  extension: '#007acc',
+  skill: '#cca700',
+  agent: '#4ec9b0',
+  instruction: '#b180d7',
+}
+
+const TYPE_LABELS: Record<ContentType, string> = {
+  extension: 'Extension',
+  skill: 'Skill',
+  agent: 'Agent',
+  instruction: 'Instruction',
+}
 
 export class DetailView {
   private static panel: vscode.WebviewPanel | undefined
@@ -9,7 +30,7 @@ export class DetailView {
     if (DetailView.panel) {
       DetailView.panel.reveal(vscode.ViewColumn.Active)
       DetailView.panel.title = resource.meta.displayName
-      DetailView.panel.webview.html = DetailView.buildHtml(resource, extensionUri)
+      DetailView.panel.webview.html = DetailView.buildHtml(resource)
       return
     }
 
@@ -20,7 +41,7 @@ export class DetailView {
       { enableScripts: true, retainContextWhenHidden: true }
     )
 
-    DetailView.panel.webview.html = DetailView.buildHtml(resource, extensionUri)
+    DetailView.panel.webview.html = DetailView.buildHtml(resource)
 
     DetailView.panel.webview.onDidReceiveMessage((msg) => {
       if (msg.type === 'install' || msg.type === 'update') {
@@ -35,160 +56,238 @@ export class DetailView {
     })
   }
 
-  private static buildHtml(resource: ResourceItem, extensionUri: vscode.Uri): string {
+  private static buildHtml(resource: ResourceItem): string {
     const nonce = getNonce()
-    const description = marked.parse(resource.meta.description || 'No description available.')
+    const { meta, status } = resource
+    const iconSvg = TYPE_SVGS[meta.type]
+    const iconColor = TYPE_COLORS[meta.type]
+    const typeLabel = TYPE_LABELS[meta.type]
+    const descriptionHtml = marked.parse(meta.description || '*No description provided.*')
 
-    const statusLabel =
-      resource.status === 'installed'
-        ? '<span class="badge badge-installed">Installed</span>'
-        : resource.status === 'updatable'
-          ? '<span class="badge badge-updatable">Update Available</span>'
-          : '<span class="badge badge-available">Available</span>'
-
-    const actionButton =
-      resource.status === 'updatable'
-        ? `<button class="btn btn-primary" id="actionBtn" data-action="update">Update to v${resource.meta.version}</button>`
-        : resource.status === 'available'
-          ? `<button class="btn btn-primary" id="actionBtn" data-action="install">Install v${resource.meta.version}</button>`
-          : `<button class="btn btn-secondary" id="actionBtn" data-action="uninstall">Uninstall</button>`
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-editor-foreground);
-      background: var(--vscode-editor-background);
-      padding: 20px;
-      max-width: 900px;
-      margin: 0 auto;
-      line-height: 1.6;
+    // Action buttons (match official Extensions: Install blue + Manage gray)
+    let primaryBtn: string
+    let secondaryBtn = ''
+    if (status === 'updatable') {
+      primaryBtn = '<button class="btn btn-primary" id="actionBtn" data-action="update">Update</button>'
+      secondaryBtn = '<button class="btn btn-secondary" id="actionBtn2" data-action="uninstall">Uninstall</button>'
+    } else if (status === 'available') {
+      primaryBtn = '<button class="btn btn-primary" id="actionBtn" data-action="install">Install</button>'
+    } else {
+      primaryBtn = '<button class="btn btn-secondary" id="actionBtn" data-action="uninstall">Uninstall</button>'
     }
-    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-    .header-icon { font-size: 48px; }
-    .header-info { flex: 1; }
-    .header-info h1 { margin: 0; font-size: 24px; }
-    .header-meta { color: var(--vscode-descriptionForeground); margin-top: 4px; }
-    .badge {
-      display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px;
-    }
-    .badge-installed { background: var(--vscode-testing-iconPassed-foreground, #4ec9b0); color: #fff; }
-    .badge-updatable { background: var(--vscode-testing-iconQueued-foreground, #cca700); color: #fff; }
-    .badge-available { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-    .actions { display: flex; gap: 8px; margin: 20px 0; }
-    .btn {
-      padding: 6px 16px; border: none; border-radius: 4px; cursor: pointer;
-      font-family: var(--vscode-font-family); font-size: 13px;
-    }
-    .btn-primary {
-      background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-    }
-    .btn-primary:hover { background: var(--vscode-button-hoverBackground); }
-    .btn-secondary {
-      background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
-    }
-    .btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    .tabs { display: flex; border-bottom: 1px solid var(--vscode-panel-border); margin-bottom: 16px; }
-    .tab {
-      padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent;
-      color: var(--vscode-descriptionForeground);
-    }
-    .tab.active {
-      color: var(--vscode-editor-foreground);
-      border-bottom-color: var(--vscode-focusBorder);
-    }
-    .content { display: none; }
-    .content.active { display: block; }
-    .meta-table { width: 100%; border-collapse: collapse; }
-    .meta-table td { padding: 6px 0; }
-    .meta-table td:first-child { color: var(--vscode-descriptionForeground); width: 120px; }
-    pre {
-      background: var(--vscode-textCodeBlock-background);
-      padding: 12px; border-radius: 4px; overflow-x: auto;
-    }
-    code { font-family: var(--vscode-editor-font-family); }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="header-icon">$({getTypeIcon(resource.meta.type)})</div>
-    <div class="header-info">
-      <h1>${escapeHtml(resource.meta.displayName)}</h1>
-      <div class="header-meta">
-        ${escapeHtml(resource.meta.name)} · v${escapeHtml(resource.meta.version)}
-        ${resource.meta.publisher ? ' · ' + escapeHtml(resource.meta.publisher) : ''}
-        · ${statusLabel}
-      </div>
-    </div>
-  </div>
 
-  <div class="actions">${actionButton}</div>
+    // Version line
+    const versionLine = status === 'updatable' && resource.installedVersion
+      ? resource.installedVersion + ' \u2192 ' + meta.version
+      : 'v' + meta.version
 
-  <div class="tabs">
-    <div class="tab active" data-tab="description">Description</div>
-    <div class="tab" data-tab="details">Details</div>
+    return '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
+      '<meta charset="UTF-8">\n' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+      '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'nonce-' + nonce + '\';">\n' +
+      '<style>\n' +
+      '* { box-sizing: border-box; margin: 0; padding: 0; }\n' +
+      'body {\n' +
+      '  font-family: var(--vscode-font-family);\n' +
+      '  color: var(--vscode-foreground);\n' +
+      '  background: var(--vscode-editor-background);\n' +
+      '  font-size: 13px;\n' +
+      '  line-height: 1.5;\n' +
+      '}\n' +
 
-  <div id="description" class="content active">${description}</div>
+      /* Header: icon + info + buttons (matches official) */
+      '.header {\n' +
+      '  display: flex; align-items: flex-start; gap: 16px;\n' +
+      '  padding: 24px 24px 20px;\n' +
+      '}\n' +
+      '.icon {\n' +
+      '  width: 72px; height: 72px; border-radius: 8px; flex-shrink: 0;\n' +
+      '  background: ' + iconColor + '15;\n' +
+      '  display: flex; align-items: center; justify-content: center;\n' +
+      '  color: ' + iconColor + ';\n' +
+      '}\n' +
+      '.icon svg { width: 40px; height: 40px; }\n' +
+      '.info { flex: 1; min-width: 0; }\n' +
+      '.info h1 { font-size: 22px; font-weight: 600; margin-bottom: 2px; }\n' +
+      '.info .publisher {\n' +
+      '  color: var(--vscode-textLink-foreground);\n' +
+      '  font-size: 12px; margin-bottom: 4px;\n' +
+      '}\n' +
+      '.info .version-line {\n' +
+      '  color: var(--vscode-descriptionForeground);\n' +
+      '  font-size: 12px;\n' +
+      '}\n' +
 
-  <div id="details" class="content">
-    <table class="meta-table">
-      <tr><td>Type</td><td>${escapeHtml(resource.meta.type)}</td></tr>
-      <tr><td>Name</td><td>${escapeHtml(resource.meta.name)}</td></tr>
-      <tr><td>Version</td><td>${escapeHtml(resource.meta.version)}</td></tr>
-      ${resource.meta.publisher ? `<tr><td>Publisher</td><td>${escapeHtml(resource.meta.publisher)}</td></tr>` : ''}
-      <tr><td>Registry</td><td>${escapeHtml(resource.registryName)}</td></tr>
-      ${resource.meta.tags.length > 0 ? `<tr><td>Tags</td><td>${resource.meta.tags.map(escapeHtml).join(', ')}</td></tr>` : ''}
-    </table>
-  </div>
+      /* Action buttons row (below header, matches official) */
+      '.actions-row {\n' +
+      '  display: flex; align-items: center; gap: 8px;\n' +
+      '  padding: 0 24px 16px;\n' +
+      '}\n' +
+      '.btn {\n' +
+      '  padding: 6px 20px; border-radius: 4px; cursor: pointer;\n' +
+      '  font-family: var(--vscode-font-family); font-size: 13px; font-weight: 500;\n' +
+      '  white-space: nowrap;\n' +
+      '}\n' +
+      '.btn-primary {\n' +
+      '  background: var(--vscode-button-background);\n' +
+      '  color: var(--vscode-button-foreground);\n' +
+      '  border: none;\n' +
+      '}\n' +
+      '.btn-primary:hover { background: var(--vscode-button-hoverBackground); }\n' +
+      '.btn-secondary {\n' +
+      '  background: var(--vscode-button-secondaryBackground);\n' +
+      '  color: var(--vscode-button-secondaryForeground);\n' +
+      '  border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.3));\n' +
+      '}\n' +
+      '.btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }\n' +
+      '.btn-text {\n' +
+      '  background: transparent; color: var(--vscode-textLink-foreground);\n' +
+      '  border: none; padding: 6px 8px;\n' +
+      '}\n' +
+      '.btn-text:hover { text-decoration: underline; }\n' +
 
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
+      /* Tabs (match official: Features/Changelog/Dependencies/README) */
+      '.tabs {\n' +
+      '  display: flex; border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2));\n' +
+      '  padding: 0 24px;\n' +
+      '}\n' +
+      '.tab {\n' +
+      '  padding: 8px 16px; cursor: pointer;\n' +
+      '  border-bottom: 2px solid transparent;\n' +
+      '  color: var(--vscode-descriptionForeground);\n' +
+      '  font-size: 13px; user-select: none;\n' +
+      '}\n' +
+      '.tab:hover { color: var(--vscode-foreground); }\n' +
+      '.tab.active {\n' +
+      '  color: var(--vscode-foreground);\n' +
+      '  border-bottom-color: var(--vscode-focusBorder);\n' +
+      '}\n' +
 
-    document.getElementById('actionBtn').addEventListener('click', function() {
-      vscode.postMessage({ type: this.getAttribute('data-action') });
-    });
+      /* Content area */
+      '.content { display: none; padding: 20px 24px; max-width: 900px; }\n' +
+      '.content.active { display: block; }\n' +
 
-    document.querySelectorAll('.tab').forEach(function(tab) {
-      tab.addEventListener('click', function() {
-        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-        document.querySelectorAll('.content').forEach(function(c) { c.classList.remove('active'); });
-        this.classList.add('active');
-        document.getElementById(this.getAttribute('data-tab')).classList.add('active');
-      });
-    });
-  </script>
-</body>
-</html>`
+      /* Markdown styling */
+      '.content h1, .content h2, .content h3 { margin: 20px 0 8px; font-weight: 600; }\n' +
+      '.content h1 { font-size: 20px; }\n' +
+      '.content h2 { font-size: 16px; }\n' +
+      '.content h3 { font-size: 14px; }\n' +
+      '.content p { margin: 8px 0; }\n' +
+      '.content ul, .content ol { margin: 8px 0 8px 24px; }\n' +
+      '.content li { margin: 2px 0; }\n' +
+      '.content code {\n' +
+      '  font-family: var(--vscode-editor-font-family);\n' +
+      '  background: var(--vscode-textCodeBlock-background);\n' +
+      '  padding: 1px 4px; border-radius: 3px; font-size: 12px;\n' +
+      '}\n' +
+      '.content pre {\n' +
+      '  background: var(--vscode-textCodeBlock-background);\n' +
+      '  padding: 12px; border-radius: 4px; overflow-x: auto; margin: 8px 0;\n' +
+      '}\n' +
+      '.content pre code { background: none; padding: 0; }\n' +
+      '.content a { color: var(--vscode-textLink-foreground); }\n' +
+      '.content a:hover { color: var(--vscode-textLink-activeForeground); }\n' +
+      '.content hr {\n' +
+      '  border: none; border-top: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2));\n' +
+      '  margin: 16px 0;\n' +
+      '}\n' +
+      '.content img { max-width: 100%; border-radius: 4px; }\n' +
+
+      /* Details table */
+      '.details-table { width: 100%; border-collapse: collapse; margin-top: 8px; }\n' +
+      '.details-table tr { border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.1)); }\n' +
+      '.details-table td { padding: 8px 0; vertical-align: top; }\n' +
+      '.details-table td:first-child {\n' +
+      '  color: var(--vscode-descriptionForeground); width: 130px;\n' +
+      '  font-size: 12px;\n' +
+      '}\n' +
+      '.tag {\n' +
+      '  display: inline-block; padding: 2px 8px; margin: 2px 4px 2px 0;\n' +
+      '  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);\n' +
+      '  border-radius: 10px; font-size: 11px;\n' +
+      '}\n' +
+      '</style>\n</head>\n<body>\n' +
+
+      /* Header */
+      '<div class="header">\n' +
+      '  <div class="icon">' + iconSvg + '</div>\n' +
+      '  <div class="info">\n' +
+      '    <h1>' + esc(meta.displayName) + '</h1>\n' +
+      (meta.publisher ? '    <div class="publisher">' + esc(meta.publisher) + '</div>\n' : '') +
+      '    <div class="version-line">' + esc(typeLabel) + ' &middot; ' + esc(versionLine) + '</div>\n' +
+      '  </div>\n' +
+      '</div>\n' +
+
+      /* Action buttons row */
+      '<div class="actions-row">\n' +
+      '  ' + primaryBtn + '\n' +
+      '  ' + secondaryBtn + '\n' +
+      '</div>\n' +
+
+      /* Tabs */
+      '<div class="tabs">\n' +
+      '  <div class="tab active" data-tab="readme">README</div>\n' +
+      '  <div class="tab" data-tab="features">Features</div>\n' +
+      '  <div class="tab" data-tab="details">Details</div>\n' +
+      '</div>\n' +
+
+      /* README content */
+      '<div id="readme" class="content active">' + descriptionHtml + '</div>\n' +
+
+      /* Features content */
+      '<div id="features" class="content">\n' +
+      '  <h2>Features</h2>\n' +
+      '  <ul>\n' +
+      '    <li>' + esc(typeLabel) + ': ' + esc(meta.displayName) + '</li>\n' +
+      '    <li>Version: ' + esc(meta.version) + '</li>\n' +
+      (meta.tags.length > 0 ? '    <li>Tags: ' + meta.tags.map(esc).join(', ') + '</li>\n' : '') +
+      '  </ul>\n' +
+      '</div>\n' +
+
+      /* Details content */
+      '<div id="details" class="content">\n' +
+      '  <table class="details-table">\n' +
+      '    <tr><td>Identifier</td><td><code>' + esc(meta.name) + '</code></td></tr>\n' +
+      '    <tr><td>Version</td><td>' + esc(meta.version) + '</td></tr>\n' +
+      (meta.publisher ? '    <tr><td>Publisher</td><td>' + esc(meta.publisher) + '</td></tr>\n' : '') +
+      '    <tr><td>Type</td><td>' + esc(typeLabel) + '</td></tr>\n' +
+      '    <tr><td>Registry</td><td>' + esc(resource.registryName) + '</td></tr>\n' +
+      (meta.tags.length > 0 ? '    <tr><td>Tags</td><td>' + meta.tags.map(function(t) { return '<span class="tag">' + esc(t) + '</span>' }).join('') + '</td></tr>\n' : '') +
+      '  </table>\n' +
+      '</div>\n' +
+
+      /* Script */
+      '<script nonce="' + nonce + '">\n' +
+      'var vscode = acquireVsCodeApi();\n' +
+      'document.getElementById("actionBtn").addEventListener("click", function() {\n' +
+      '  vscode.postMessage({ type: this.getAttribute("data-action") });\n' +
+      '});\n' +
+      'var btn2 = document.getElementById("actionBtn2");\n' +
+      'if (btn2) btn2.addEventListener("click", function() {\n' +
+      '  vscode.postMessage({ type: this.getAttribute("data-action") });\n' +
+      '});\n' +
+      'var tabs = document.querySelectorAll(".tab");\n' +
+      'for (var i = 0; i < tabs.length; i++) {\n' +
+      '  tabs[i].addEventListener("click", function() {\n' +
+      '    for (var j = 0; j < tabs.length; j++) tabs[j].classList.remove("active");\n' +
+      '    var allContent = document.querySelectorAll(".content");\n' +
+      '    for (var k = 0; k < allContent.length; k++) allContent[k].classList.remove("active");\n' +
+      '    this.classList.add("active");\n' +
+      '    document.getElementById(this.getAttribute("data-tab")).classList.add("active");\n' +
+      '  });\n' +
+      '}\n' +
+      '</script>\n</body>\n</html>'
   }
 }
 
-function getTypeIcon(type: string): string {
-  const icons: Record<string, string> = {
-    extension: 'extensions',
-    skill: 'brain',
-    agent: 'robot',
-    instruction: 'note',
-  }
-  return icons[type] || 'package'
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+function esc(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function getNonce(): string {
-  let text = ''
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  for (let i = 0; i < 32; i++) {
+  var text = ''
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  for (var i = 0; i < 32; i++) {
     text += chars.charAt(Math.floor(Math.random() * chars.length))
   }
   return text

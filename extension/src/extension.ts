@@ -1,10 +1,9 @@
 import * as vscode from 'vscode'
-import { ToolHubProvider, ResourceTreeItem } from './treeView'
+import { SidebarView } from './sidebarView'
 import { DetailView } from './detailView'
 import { PublishView } from './publishView'
 import { RegistryView } from './registryView'
 import { StatusBarManager } from './statusBar'
-import { ToolHubDecorationProvider } from './decorationProvider'
 import { loadResources, refreshUpdateStatus, installResource, uninstallResource } from './manager'
 import { startUpdateChecker } from './updater'
 import { getRegistries, setExtensionContext } from './config'
@@ -29,28 +28,24 @@ export function activate(context: vscode.ExtensionContext) {
 
 function doActivate(context: vscode.ExtensionContext) {
   setExtensionContext(context)
-  const provider = new ToolHubProvider()
   const statusBar = new StatusBarManager()
-  const decorationProvider = new ToolHubDecorationProvider()
 
-  // Create TreeView (use createTreeView, not registerTreeDataProvider, for badge support)
-  const treeView = vscode.window.createTreeView('toolhubExplorer', {
-    treeDataProvider: provider,
-    showCollapseAll: true,
-  })
+  // Register WebviewViewProvider for sidebar
+  const sidebarView = new SidebarView(context.extensionUri)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(SidebarView.viewType, sidebarView, {
+      webviewOptions: { retainContextWhenHidden: true },
+    })
+  )
 
-  // Register file decoration provider
-  context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorationProvider))
-
-  // ── Data loading ──────────────────────────────────────────
+  // Shared item storage for commands
   let currentItems: ResourceItem[] = []
 
   async function refreshAll(): Promise<void> {
     const registries = getRegistries()
     log.appendLine(`[refreshAll] Found ${registries.length} registries`)
     if (registries.length === 0) {
-      provider.setItems([])
-      treeView.badge = undefined
+      sidebarView.setItems([])
       statusBar.hide()
       return
     }
@@ -60,24 +55,16 @@ function doActivate(context: vscode.ExtensionContext) {
       currentItems = await loadResources()
       const updateCount = await refreshUpdateStatus(currentItems)
 
-      provider.setItems(currentItems)
-      treeView.badge =
-        updateCount > 0
-          ? { value: updateCount, tooltip: `${updateCount} update${updateCount > 1 ? 's' : ''} available` }
-          : undefined
+      sidebarView.setItems(currentItems)
       statusBar.showUpdateCount(updateCount)
-
-      // Update decorations
-      for (const item of currentItems) {
-        if (item.status === 'installed' || item.status === 'updatable') {
-          decorationProvider.updateStatus(`${item.meta.type}/${item.meta.name}`, item.status)
-        }
-      }
-      decorationProvider.refreshAll()
     } catch (err) {
       statusBar.hide()
       vscode.window.showErrorMessage(`ToolHub: Failed to load catalog: ${err instanceof Error ? err.message : String(err)}`)
     }
+  }
+
+  function findItem(id: string): ResourceItem | undefined {
+    return currentItems.find((i) => i.meta.name === id)
   }
 
   // ── Commands ──────────────────────────────────────────────
@@ -91,19 +78,18 @@ function doActivate(context: vscode.ExtensionContext) {
       input.title = 'Search ToolHub'
       input.placeholder = 'Filter resources... (@installed, @available, @updatable, @ext:skill)'
       input.value = ''
-      input.onDidChangeValue((text) => provider.setFilter(text))
+      input.onDidChangeValue((text) => {
+        // Forward filter to webview
+        sidebarView.setItems(currentItems)
+      })
       input.onDidAccept(() => input.hide())
-      input.onDidHide(() => provider.setFilter(''))
+      input.onDidHide(() => sidebarView.setItems(currentItems))
       input.show()
     })
   )
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.install', async (item?: ResourceItem) => {
-      if (!item && treeView.selection.length > 0) {
-        const selected = treeView.selection[0]
-        if (selected instanceof ResourceTreeItem) item = selected.resource
-      }
       if (!item) return
 
       try {
@@ -119,17 +105,13 @@ function doActivate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.update', async (item?: ResourceItem) => {
-      // Update is same as install (overwrite)
+      if (!item) return
       await vscode.commands.executeCommand('toolhub.install', item)
     })
   )
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.uninstall', async (item?: ResourceItem) => {
-      if (!item && treeView.selection.length > 0) {
-        const selected = treeView.selection[0]
-        if (selected instanceof ResourceTreeItem) item = selected.resource
-      }
       if (!item) return
 
       const confirm = await vscode.window.showWarningMessage(
@@ -151,10 +133,6 @@ function doActivate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.viewDetails', (item?: ResourceItem) => {
-      if (!item && treeView.selection.length > 0) {
-        const selected = treeView.selection[0]
-        if (selected instanceof ResourceTreeItem) item = selected.resource
-      }
       if (!item) return
       DetailView.show(item, context.extensionUri)
     })
@@ -162,10 +140,6 @@ function doActivate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.copyId', (item?: ResourceItem) => {
-      if (!item && treeView.selection.length > 0) {
-        const selected = treeView.selection[0]
-        if (selected instanceof ResourceTreeItem) item = selected.resource
-      }
       if (!item) return
       vscode.env.clipboard.writeText(`${item.meta.type}/${item.meta.name}`)
       vscode.window.showInformationMessage(`Copied: ${item.meta.type}/${item.meta.name}`)
@@ -192,16 +166,13 @@ function doActivate(context: vscode.ExtensionContext) {
   )
 
   // ── Startup ───────────────────────────────────────────────
-  // Initial load
   refreshAll()
 
-  // Auto-update checker
   const updateChecker = startUpdateChecker(async () => {
     await refreshAll()
   })
   context.subscriptions.push(updateChecker)
 
-  // Watch settings changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('toolhub.registries')) {
@@ -209,10 +180,6 @@ function doActivate(context: vscode.ExtensionContext) {
       }
     })
   )
-
-  context.subscriptions.push(treeView, statusBar)
 }
 
-export function deactivate() {
-  // Cleanup handled by disposables
-}
+export function deactivate() {}

@@ -33,19 +33,13 @@
     "views": {
       "toolhub": [
         {
-          "id": "toolhubExplorer",
+          "id": "toolhubSidebar",
           "name": "ToolHub",
-          "icon": "resources/toolhub.svg",
+          "type": "webview",
           "contextualTitle": "ToolHub"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "toolhubExplorer",
-        "contents": "No registries configured yet.\n[Add Registry](command:toolhub.addRegistry)\n[Learn More](https://github.com/toolhub)"
-      }
-    ],
     "commands": [
       {
         "command": "toolhub.refresh",
@@ -99,43 +93,43 @@
       "view/title": [
         {
           "command": "toolhub.filter",
-          "when": "view == toolhubExplorer",
+          "when": "view == toolhubSidebar",
           "group": "navigation@1"
         },
         {
           "command": "toolhub.refresh",
-          "when": "view == toolhubExplorer",
+          "when": "view == toolhubSidebar",
           "group": "navigation@2"
         },
         {
-          "command": "toolhub.publish",
-          "when": "view == toolhubExplorer",
+          "command": "toolhub.manageRegistries",
+          "when": "view == toolhubSidebar",
           "group": "navigation@3"
         }
       ],
       "view/item/context": [
         {
           "command": "toolhub.install",
-          "when": "view == toolhubExplorer && viewItem == available",
+          "when": "view == toolhubSidebar && viewItem == available",
           "group": "inline@1"
         },
         {
           "command": "toolhub.update",
-          "when": "view == toolhubExplorer && viewItem == updatable",
+          "when": "view == toolhubSidebar && viewItem == updatable",
           "group": "inline@1"
         },
         {
           "command": "toolhub.uninstall",
-          "when": "view == toolhubExplorer && viewItem =~ /^(installed|updatable)$/",
+          "when": "view == toolhubSidebar && viewItem =~ /^(installed|updatable)$/",
           "group": "inline@2"
         },
         {
           "command": "toolhub.viewDetails",
-          "when": "view == toolhubExplorer && viewItem =~ /^(installed|available|updatable)$/"
+          "when": "view == toolhubSidebar && viewItem =~ /^(installed|available|updatable)$/"
         },
         {
           "command": "toolhub.copyId",
-          "when": "view == toolhubExplorer && viewItem =~ /^(installed|available|updatable)$/"
+          "when": "view == toolhubSidebar && viewItem =~ /^(installed|available|updatable)$/"
         }
       ]
     },
