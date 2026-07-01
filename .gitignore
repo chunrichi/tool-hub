@@ -1,0 +1,30 @@
+# Project-specific exclusions
+.github/
+docs/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+*.js.map
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+
+# IDE
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Server runtime
+server/data/catalog.json
+
+# Extension packaging
+*.vsix
