@@ -63,26 +63,140 @@ function scanVsix(filePath: string): ResourceMeta | null {
 }
 
 function scanDirectory(dirPath: string, dirName: string): ResourceMeta | null {
+  // Try SKILL.md / *.agent.md / *.instructions.md header first
+  const headerFile = findHeaderFile(dirPath)
+  if (headerFile) {
+    const meta = parseHeaderFile(headerFile, dirName)
+    if (meta) return meta
+  }
+
+  // Fallback: version.json (legacy format)
   const versionJsonPath = path.join(dirPath, 'version.json')
-  if (!fs.existsSync(versionJsonPath)) return null
+  if (fs.existsSync(versionJsonPath)) {
+    try {
+      const raw = fs.readFileSync(versionJsonPath, 'utf-8')
+      const meta = JSON.parse(raw) as Record<string, unknown>
+      const type = meta.type as ContentType
+      if (['skill', 'agent', 'instruction'].includes(type)) {
+        return {
+          type,
+          name: (meta.name as string) || dirName,
+          version: (meta.version as string) || '0.0.0',
+          displayName: (meta.displayName as string) || dirName,
+          description: (meta.description as string) || '',
+          tags: (meta.tags as string[]) || [],
+          fileName: dirName,
+        }
+      }
+    } catch { /* ignore */ }
+  }
 
+  return null
+}
+
+function findHeaderFile(dirPath: string): string | null {
+  const candidates = ['SKILL.md', 'AGENT.md', 'INSTRUCTIONS.md']
+  for (const name of candidates) {
+    const p = path.join(dirPath, name)
+    if (fs.existsSync(p)) return p
+  }
+  // Also check for *.agent.md, *.instructions.md
+  const files = fs.readdirSync(dirPath)
+  for (const f of files) {
+    if (f.endsWith('.agent.md') || f.endsWith('.instructions.md')) {
+      return path.join(dirPath, f)
+    }
+  }
+  return null
+}
+
+function parseHeaderFile(filePath: string, dirName: string): ResourceMeta | null {
   try {
-    const raw = fs.readFileSync(versionJsonPath, 'utf-8')
-    const meta = JSON.parse(raw) as Record<string, unknown>
+    const raw = fs.readFileSync(filePath, 'utf-8')
+    const header = extractFrontmatter(raw)
+    if (!header) return null
 
-    const type = meta.type as ContentType
+    const type = header.type as string
     if (!['skill', 'agent', 'instruction'].includes(type)) return null
 
     return {
-      type,
-      name: (meta.name as string) || dirName,
-      version: (meta.version as string) || '0.0.0',
-      displayName: (meta.displayName as string) || dirName,
-      description: (meta.description as string) || '',
-      tags: (meta.tags as string[]) || [],
+      type: type as ContentType,
+      name: (header.name as string) || dirName,
+      version: (header.version as string) || '0.0.0',
+      displayName: (header.displayName as string) || (header.name as string) || dirName,
+      description: (header.description as string) || '',
+      tags: (header.tags as string[]) || [],
       fileName: dirName,
     }
   } catch {
     return null
   }
+}
+
+function extractFrontmatter(content: string): Record<string, unknown> | null {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---/)
+  if (!match) return null
+
+  const yaml = match[1]
+  const result: Record<string, unknown> = {}
+  let currentKey = ''
+  let isArray = false
+  let arrayValues: string[] = []
+
+  for (const line of yaml.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // Array item
+    if (trimmed.startsWith('- ')) {
+      if (isArray) {
+        arrayValues.push(trimmed.slice(2).trim().replace(/^["']|["']$/g, ''))
+      }
+      continue
+    }
+
+    // New key
+    const colonIdx = trimmed.indexOf(':')
+    if (colonIdx > 0) {
+      // Save previous array
+      if (isArray && currentKey) {
+        result[currentKey] = arrayValues
+      }
+
+      currentKey = trimmed.slice(0, colonIdx).trim()
+      const value = trimmed.slice(colonIdx + 1).trim()
+
+      if (value === '' || value === '[]') {
+        // Could be an array
+        isArray = true
+        arrayValues = []
+      } else {
+        isArray = false
+        arrayValues = []
+        // Parse value
+        if (value.startsWith('[') && value.endsWith(']')) {
+          // Inline array: [tag1, tag2]
+          result[currentKey] = value
+            .slice(1, -1)
+            .split(',')
+            .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+        } else if (value === 'true') {
+          result[currentKey] = true
+        } else if (value === 'false') {
+          result[currentKey] = false
+        } else if (/^\d+$/.test(value)) {
+          result[currentKey] = parseInt(value, 10)
+        } else {
+          result[currentKey] = value.replace(/^["']|["']$/g, '')
+        }
+      }
+    }
+  }
+
+  // Save last array
+  if (isArray && currentKey) {
+    result[currentKey] = arrayValues
+  }
+
+  return result
 }

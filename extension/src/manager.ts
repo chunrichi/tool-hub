@@ -245,13 +245,10 @@ function getInstalledResources(): Record<string, { version: string }> {
   const userSkillsDir = path.join(os.homedir(), '.agents', 'skills')
   if (fs.existsSync(userSkillsDir)) {
     for (const name of fs.readdirSync(userSkillsDir)) {
-      const versionFile = path.join(userSkillsDir, name, 'version.json')
-      if (fs.existsSync(versionFile)) {
-        try {
-          const meta = JSON.parse(fs.readFileSync(versionFile, 'utf-8'))
-          result[`skill/${meta.name || name}`] = { version: meta.version }
-          log(`[ToolHub] Found user skill: ${meta.name || name}`)
-        } catch { /* ignore */ }
+      const meta = parseSkillMetadata(path.join(userSkillsDir, name))
+      if (meta) {
+        result[`skill/${meta.name}`] = { version: meta.version }
+        log(`[ToolHub] Found user skill: ${meta.name} v${meta.version}`)
       }
     }
   }
@@ -261,8 +258,10 @@ function getInstalledResources(): Record<string, { version: string }> {
     for (const file of fs.readdirSync(userAgentsDir)) {
       if (file.endsWith('.agent.md')) {
         const name = file.replace('.agent.md', '')
-        result[`agent/${name}`] = { version: '0.0.0' }
-        log(`[ToolHub] Found user agent: ${name}`)
+        const agentPath = path.join(userAgentsDir, file)
+        const version = parseAgentVersion(agentPath)
+        result[`agent/${name}`] = { version }
+        log(`[ToolHub] Found user agent: ${name} v${version}`)
       }
     }
   }
@@ -272,25 +271,13 @@ function getInstalledResources(): Record<string, { version: string }> {
   log(`[ToolHub] Workspace path: ${ws || 'none'}`)
   if (ws) {
     const wsSkillsDir = path.join(ws, '.copilot', 'skills')
-    log(`[ToolHub] Checking workspace skills dir: ${wsSkillsDir}, exists: ${fs.existsSync(wsSkillsDir)}`)
     if (fs.existsSync(wsSkillsDir)) {
       for (const name of fs.readdirSync(wsSkillsDir)) {
-        log(`[ToolHub] Found workspace skill dir: ${name}`)
-        const versionFile = path.join(wsSkillsDir, name, 'version.json')
-        const exists = fs.existsSync(versionFile)
-        log(`[ToolHub] version.json exists: ${exists}, path: ${versionFile}`)
-        if (exists) {
-          try {
-            const raw = fs.readFileSync(versionFile, 'utf-8')
-            log(`[ToolHub] version.json content: ${raw}`)
-            const meta = JSON.parse(raw)
-            result[`skill/${meta.name || name}`] = { version: meta.version }
-            log(`[ToolHub] Found workspace skill: ${meta.name || name} v${meta.version}`)
-          } catch (e) {
-            log(`[ToolHub] Error reading version.json: ${e}`)
-          }
+        const meta = parseSkillMetadata(path.join(wsSkillsDir, name))
+        if (meta) {
+          result[`skill/${meta.name}`] = { version: meta.version }
+          log(`[ToolHub] Found workspace skill: ${meta.name} v${meta.version}`)
         } else {
-          // List files in the directory to debug
           const files = fs.readdirSync(path.join(wsSkillsDir, name))
           log(`[ToolHub] Files in ${name}: ${files.join(', ')}`)
         }
@@ -302,11 +289,100 @@ function getInstalledResources(): Record<string, { version: string }> {
       for (const file of fs.readdirSync(wsAgentsDir)) {
         if (file.endsWith('.agent.md')) {
           const name = file.replace('.agent.md', '')
-          result[`agent/${name}`] = { version: '0.0.0' }
-          log(`[ToolHub] Found workspace agent: ${name}`)
+          const agentPath = path.join(wsAgentsDir, file)
+          const version = parseAgentVersion(agentPath)
+          result[`agent/${name}`] = { version }
+          log(`[ToolHub] Found workspace agent: ${name} v${version}`)
         }
       }
     }
+  }
+
+  return result
+}
+
+// ── Metadata parsing helpers ──
+function parseSkillMetadata(dirPath: string): { name: string; version: string } | null {
+  // Try SKILL.md header first
+  const skillMd = path.join(dirPath, 'SKILL.md')
+  if (fs.existsSync(skillMd)) {
+    const header = extractFrontmatter(fs.readFileSync(skillMd, 'utf-8'))
+    if (header && header.name) {
+      return { name: header.name as string, version: (header.version as string) || '0.0.0' }
+    }
+  }
+
+  // Fallback: version.json
+  const versionFile = path.join(dirPath, 'version.json')
+  if (fs.existsSync(versionFile)) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(versionFile, 'utf-8'))
+      return { name: meta.name || path.basename(dirPath), version: meta.version || '0.0.0' }
+    } catch { /* ignore */ }
+  }
+
+  return null
+}
+
+function parseAgentVersion(filePath: string): string {
+  const content = fs.readFileSync(filePath, 'utf-8')
+  const header = extractFrontmatter(content)
+  return (header?.version as string) || '0.0.0'
+}
+
+function extractFrontmatter(content: string): Record<string, unknown> | null {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---/)
+  if (!match) return null
+
+  const yaml = match[1]
+  const result: Record<string, unknown> = {}
+  let currentKey = ''
+  let isArray = false
+  let arrayValues: string[] = []
+
+  for (const line of yaml.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    if (trimmed.startsWith('- ')) {
+      if (isArray) {
+        arrayValues.push(trimmed.slice(2).trim().replace(/^["']|["']$/g, ''))
+      }
+      continue
+    }
+
+    const colonIdx = trimmed.indexOf(':')
+    if (colonIdx > 0) {
+      if (isArray && currentKey) {
+        result[currentKey] = arrayValues
+      }
+
+      currentKey = trimmed.slice(0, colonIdx).trim()
+      const value = trimmed.slice(colonIdx + 1).trim()
+
+      if (value === '' || value === '[]') {
+        isArray = true
+        arrayValues = []
+      } else {
+        isArray = false
+        arrayValues = []
+        if (value.startsWith('[') && value.endsWith(']')) {
+          result[currentKey] = value.slice(1, -1).split(',').map((s) => s.trim().replace(/^["']|["']$/g, ''))
+        } else if (value === 'true') {
+          result[currentKey] = true
+        } else if (value === 'false') {
+          result[currentKey] = false
+        } else if (/^\d+$/.test(value)) {
+          result[currentKey] = parseInt(value, 10)
+        } else {
+          result[currentKey] = value.replace(/^["']|["']$/g, '')
+        }
+      }
+    }
+  }
+
+  if (isArray && currentKey) {
+    result[currentKey] = arrayValues
   }
 
   return result
