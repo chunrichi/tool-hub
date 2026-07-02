@@ -6,9 +6,13 @@ export interface ResourceMeta {
   version: string
   displayName: string
   description: string
+  readme?: string
   tags: string[]
   publisher?: string
   fileName: string
+  avgRating?: number
+  ratingCount?: number
+  downloadCount?: number
 }
 
 export interface Catalog {
@@ -26,6 +30,23 @@ export interface UpdateCheckResult {
   currentVersion: string
   latestVersion: string
   hasUpdate: boolean
+}
+
+export interface Rating {
+  id: number
+  resourceId: number
+  userId: string
+  score: number
+  createdAt: string
+}
+
+export interface PublishLogEntry {
+  id: number
+  fileName: string
+  fileSize: number
+  status: string
+  errorMsg?: string
+  publishedAt: string
 }
 
 export interface ApiResponse<T = unknown> {

@@ -36,14 +36,18 @@ export class ResourceTreeItem extends vscode.TreeItem {
     const iconId = TYPE_ICONS[resource.meta.type]
     this.iconPath = new vscode.ThemeIcon(iconId)
 
-    // Description: publisher only (matches official Extensions view style)
-    // The official Extensions view shows "publisher" as description, not version
-    this.description = resource.meta.publisher || resource.registryName
+    // Description: version (matches VS Code Extensions view style)
+    // Shows version with update indicator if applicable
+    if (resource.status === 'updatable' && resource.installedVersion) {
+      this.description = `${resource.installedVersion} → ${resource.meta.version}`
+    } else {
+      this.description = `v${resource.meta.version}`
+    }
 
     // contextValue drives menu visibility
     this.contextValue = resource.status
 
-    // Rich tooltip with version and full details
+    // Rich tooltip with publisher, description, and full details
     this.tooltip = buildTooltip(resource)
 
     // Click opens details
@@ -63,6 +67,12 @@ function buildTooltip(resource: ResourceItem): vscode.MarkdownString {
   // Title line: name + version
   md.appendMarkdown(`**${resource.meta.displayName}** v${resource.meta.version}\n\n`)
 
+  // Publisher
+  if (resource.meta.publisher) {
+    md.appendMarkdown(`$(person) ${resource.meta.publisher}\n\n`)
+  }
+
+  // Description
   if (resource.meta.description) {
     md.appendMarkdown(`${resource.meta.description}\n\n`)
   }

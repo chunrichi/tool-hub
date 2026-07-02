@@ -1,18 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
-import { saveCatalogToDisk } from './storage.js'
+import { upsertResource, getCatalog } from './storage.js'
 import type { Catalog, ContentType, ResourceMeta } from './types.js'
 
 export async function scanContent(): Promise<Catalog> {
-  const items: ResourceMeta[] = []
   const contentDir = config.contentDir
 
   if (!fs.existsSync(contentDir)) {
     fs.mkdirSync(contentDir, { recursive: true })
-    const catalog: Catalog = { items: [], lastScan: new Date().toISOString() }
-    saveCatalogToDisk(catalog)
-    return catalog
+    return getCatalog()
   }
 
   const entries = fs.readdirSync(contentDir, { withFileTypes: true })
@@ -22,18 +19,16 @@ export async function scanContent(): Promise<Catalog> {
 
     if (entry.isFile() && entry.name.endsWith('.vsix')) {
       const meta = scanVsix(path.join(contentDir, entry.name))
-      if (meta) items.push(meta)
+      if (meta) upsertResource(meta)
     }
 
     if (entry.isDirectory()) {
       const meta = scanDirectory(path.join(contentDir, entry.name), entry.name)
-      if (meta) items.push(meta)
+      if (meta) upsertResource(meta)
     }
   }
 
-  const catalog: Catalog = { items, lastScan: new Date().toISOString() }
-  saveCatalogToDisk(catalog)
-  return catalog
+  return getCatalog()
 }
 
 function scanVsix(filePath: string): ResourceMeta | null {
@@ -110,7 +105,7 @@ function findHeaderFile(dirPath: string): string | null {
   return null
 }
 
-function parseHeaderFile(filePath: string, dirName: string): ResourceMeta | null {
+function parseHeaderFile(filePath: string, dirName: string): (ResourceMeta & { readme?: string }) | null {
   try {
     const raw = fs.readFileSync(filePath, 'utf-8')
     const header = extractFrontmatter(raw)
@@ -118,6 +113,9 @@ function parseHeaderFile(filePath: string, dirName: string): ResourceMeta | null
 
     const type = header.type as string
     if (!['skill', 'agent', 'instruction'].includes(type)) return null
+
+    // Extract readme body (content after frontmatter)
+    const readme = raw.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '').trim()
 
     return {
       type: type as ContentType,
@@ -127,13 +125,14 @@ function parseHeaderFile(filePath: string, dirName: string): ResourceMeta | null
       description: (header.description as string) || '',
       tags: (header.tags as string[]) || [],
       fileName: dirName,
+      readme,
     }
   } catch {
     return null
   }
 }
 
-function extractFrontmatter(content: string): Record<string, unknown> | null {
+export function extractFrontmatter(content: string): Record<string, unknown> | null {
   const match = content.match(/^---\s*\n([\s\S]*?)\n---/)
   if (!match) return null
 

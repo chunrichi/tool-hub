@@ -80,6 +80,9 @@ export class SidebarView implements vscode.WebviewViewProvider {
         status: item.status,
         installedVersion: item.installedVersion,
         tags: item.meta.tags,
+        avgRating: item.meta.avgRating ?? 0,
+        ratingCount: item.meta.ratingCount ?? 0,
+        downloadCount: item.meta.downloadCount ?? 0,
       })),
     })
   }
@@ -154,35 +157,64 @@ export class SidebarView implements vscode.WebviewViewProvider {
     }
     .section.collapsed .chevron { transform: rotate(-90deg); }
 
-    /* ── Item (matches official Extensions layout) ── */
+    /* ── Item (VS Code Extensions marketplace style) ── */
     .item {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; align-items: flex-start; gap: 10px;
       padding: 8px 12px 8px 20px; cursor: pointer;
+      border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.1));
     }
-    .item:hover { background: var(--vscode-list-activeSelectionBackground); }
+    .item:last-child { border-bottom: none; }
+    .item:hover { background: var(--vscode-list-hoverBackground); }
+    .item.selected { background: var(--vscode-list-activeSelectionBackground); }
+
     .item-icon {
-      width: 48px; height: 48px; border-radius: 6px; flex-shrink: 0;
+      width: 36px; height: 36px; border-radius: 3px; flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
+      margin-top: 2px;
     }
-    .item-icon svg { width: 32px; height: 32px; }
+    .item-icon svg { width: 24px; height: 24px; }
+
     .item-info { flex: 1; min-width: 0; }
-    .item-row1 {
+
+    /* Line 1: Name + Version */
+    .item-header {
       display: flex; align-items: baseline; gap: 6px;
+      line-height: 1.3;
     }
     .item-name {
       font-size: 13px; font-weight: 600; color: var(--vscode-foreground);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .item-version {
+      font-size: 11px; color: var(--vscode-descriptionForeground);
+      white-space: nowrap; flex-shrink: 0;
+    }
+
+    /* Line 2: Publisher */
     .item-publisher {
       font-size: 12px; color: var(--vscode-descriptionForeground);
-      white-space: nowrap;
-    }
-    .item-row2 {
-      font-size: 12px; color: var(--vscode-descriptionForeground);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 1px; line-height: 1.3;
+    }
+
+    /* Line 3: Description (truncated) */
+    .item-description {
+      font-size: 11px; color: var(--vscode-descriptionForeground);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-top: 1px; line-height: 1.3;
+      opacity: 0.8;
+    }
+
+    /* Update badge */
+    .item-update-badge {
+      font-size: 10px; color: var(--vscode-charts-green, #4ec9b0);
+      margin-left: 4px; font-weight: 500;
+    }
+
+    .item-actions {
+      display: flex; gap: 4px; flex-shrink: 0; align-items: center;
       margin-top: 2px;
     }
-    .item-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
 
     /* ── Buttons ── */
     .btn-icon {
@@ -219,7 +251,7 @@ export class SidebarView implements vscode.WebviewViewProvider {
       <span class="search-icon">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04z"/></svg>
       </span>
-      <input class="search-input" id="searchInput" placeholder="Search ToolHub..." />
+      <input class="search-input" id="searchInput" placeholder="Search extensions, skills, agents..." />
     </div>
   </div>
 
@@ -281,15 +313,29 @@ export class SidebarView implements vscode.WebviewViewProvider {
           var icon = ICONS[it.type] || '';
           var color = COLORS[it.type] || '#888';
 
-          // Row 2: version info
-          var row2 = '';
-          if (it.status === 'updatable' && it.installedVersion) {
-            row2 = it.installedVersion + ' \u2192 ' + it.version;
-          } else {
-            row2 = 'v' + it.version;
+          // Version display
+          var versionHtml = '<span class="item-version">v' + escHtml(it.version) + '</span>';
+
+          // Publisher
+          var publisherHtml = '<div class="item-publisher">' + escHtml(it.publisher) + '</div>';
+
+          // Description (truncated to ~50 chars)
+          var descText = it.description ? escHtml(it.description.substring(0, 50)) : '';
+          if (it.description && it.description.length > 50) descText += '...';
+          var descHtml = descText ? '<div class="item-description">' + descText + '</div>' : '';
+
+          // Rating + downloads meta line
+          var metaHtml = '';
+          var ratingHtml = '';
+          if (it.avgRating > 0) {
+            var stars = '';
+            for (var r = 1; r <= 5; r++) stars += r <= Math.round(it.avgRating) ? '\u2605' : '\u2606';
+            ratingHtml = '<span style="color:#d4a017;font-size:10px">' + stars + '</span>';
+            ratingHtml += '<span style="font-size:10px;color:var(--vscode-descriptionForeground)">(' + it.ratingCount + ')</span>';
           }
-          if (it.description) {
-            row2 += ' \u00B7 ' + it.description.substring(0, 60);
+          var dlHtml = it.downloadCount > 0 ? '<span style="font-size:10px;color:var(--vscode-descriptionForeground)">\u2913' + it.downloadCount + '</span>' : '';
+          if (ratingHtml || dlHtml) {
+            metaHtml = '<div style="display:flex;align-items:center;gap:6px;margin-top:1px">' + ratingHtml + dlHtml + '</div>';
           }
 
           // Action button
@@ -303,11 +349,13 @@ export class SidebarView implements vscode.WebviewViewProvider {
           html += '<div class="item" data-id="' + it.id + '">';
           html += '  <div class="item-icon" style="background:' + color + '18;color:' + color + '">' + icon + '</div>';
           html += '  <div class="item-info">';
-          html += '    <div class="item-row1">';
+          html += '    <div class="item-header">';
           html += '      <span class="item-name">' + escHtml(it.name) + '</span>';
-          html += '      <span class="item-publisher">' + escHtml(it.publisher) + '</span>';
+          html += versionHtml;
           html += '    </div>';
-          html += '    <div class="item-row2">' + row2 + '</div>';
+          html += publisherHtml;
+          html += descHtml;
+          html += metaHtml;
           html += '  </div>';
           html += '  <div class="item-actions">';
           html += actionHtml;

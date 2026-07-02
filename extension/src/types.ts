@@ -6,9 +6,18 @@ export interface ResourceMeta {
   version: string
   displayName: string
   description: string
+  readme?: string
   tags: string[]
   publisher?: string
   fileName: string
+  avgRating?: number
+  ratingCount?: number
+  downloadCount?: number
+}
+
+export interface ResourceDetail extends ResourceMeta {
+  userScore: number | null
+  distribution: Record<number, number>
 }
 
 export interface Registry {
@@ -37,4 +46,5 @@ export interface ResourceItem {
   status: InstallStatus
   installedVersion?: string
   registryName: string
+  registryUrl: string
 }

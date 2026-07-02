@@ -33,6 +33,7 @@ export async function loadResources(): Promise<ResourceItem[]> {
           status,
           installedVersion: installed?.version,
           registryName: registry.name,
+          registryUrl: registry.url,
         })
       }
     } catch (err) {

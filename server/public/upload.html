@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToolHub — Publish Resource</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-tertiary: #2d2d2d;
+    --bg-hover: #3c3c3c;
+    --fg: #cccccc;
+    --fg-muted: #858585;
+    --fg-bright: #e0e0e0;
+    --accent: #0078d4;
+    --accent-hover: #1a8cff;
+    --success: #4ec9b0;
+    --error: #f44747;
+    --warning: #cca700;
+    --border: #404040;
+    --radius: 6px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 720px;
+    padding: 40px 24px;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--fg-bright);
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    color: var(--fg-muted);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  /* ── Step Indicator ── */
+  .steps {
+    display: flex;
+    align-items: center;
+    margin-bottom: 36px;
+    gap: 0;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  .step-item.active { color: var(--fg-bright); }
+  .step-item.completed { color: var(--success); }
+
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    border: 2px solid var(--border);
+    color: var(--fg-muted);
+    flex-shrink: 0;
+  }
+
+  .step-item.active .step-num {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .step-item.completed .step-num {
+    border-color: var(--success);
+    background: var(--success);
+    color: #1e1e1e;
+  }
+
+  .step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    margin: 0 12px;
+    min-width: 24px;
+  }
+
+  .step-line.completed { background: var(--success); }
+
+  /* ── Panels ── */
+  .panel {
+    display: none;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .panel.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Step 1: Upload ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 60px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--bg-secondary);
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(0, 120, 212, 0.06);
+  }
+
+  .drop-zone.has-file {
+    border-color: var(--success);
+    border-style: solid;
+    background: rgba(78, 201, 176, 0.06);
+  }
+
+  .drop-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+
+  .drop-text { font-size: 15px; color: var(--fg-muted); }
+  .drop-text strong { color: var(--fg); }
+  .drop-hint { font-size: 12px; color: var(--fg-muted); margin-top: 8px; opacity: 0.7; }
+
+  .file-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius);
+    margin-top: 16px;
+  }
+
+  .file-info-icon { font-size: 24px; }
+  .file-info-name { font-size: 14px; font-weight: 500; color: var(--fg-bright); }
+  .file-info-size { font-size: 12px; color: var(--fg-muted); }
+  .file-info-remove {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: var(--fg-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px;
+  }
+  .file-info-remove:hover { color: var(--error); }
+
+  .token-group {
+    margin-top: 20px;
+  }
+
+  .token-group label {
+    display: block;
+    font-size: 13px;
+    color: var(--fg-muted);
+    margin-bottom: 6px;
+  }
+
+  .token-group input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--fg);
+    font-size: 14px;
+    outline: none;
+  }
+
+  .token-group input:focus { border-color: var(--accent); }
+  .token-group .hint { font-size: 11px; color: var(--fg-muted); margin-top: 4px; }
+
+  /* ── Step 2: Metadata Form ── */
+  .form-group {
+    margin-bottom: 16px;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 13px;
+    color: var(--fg-muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--fg);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    border-color: var(--accent);
+  }
+
+  .form-group textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  .form-group .readme-editor {
+    min-height: 240px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .tag-input-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    min-height: 38px;
+    align-items: center;
+    cursor: text;
+  }
+
+  .tag-input-wrap:focus-within { border-color: var(--accent); }
+
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--bg-hover);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--fg-bright);
+  }
+
+  .tag-chip button {
+    background: none;
+    border: none;
+    color: var(--fg-muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+  }
+
+  .tag-chip button:hover { color: var(--error); }
+
+  .tag-input-wrap input {
+    border: none;
+    background: none;
+    outline: none;
+    color: var(--fg);
+    font-size: 13px;
+    flex: 1;
+    min-width: 80px;
+    padding: 2px 4px;
+  }
+
+  .parsing-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: var(--fg-muted);
+  }
+
+  .parsing-status.success { color: var(--success); }
+  .parsing-status.error { color: var(--error); }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Step 3: Confirm ── */
+  .confirm-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+
+  .confirm-row {
+    display: flex;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--bg-tertiary);
+    font-size: 14px;
+  }
+
+  .confirm-row:last-child { border-bottom: none; }
+
+  .confirm-label {
+    width: 120px;
+    flex-shrink: 0;
+    color: var(--fg-muted);
+  }
+
+  .confirm-value {
+    color: var(--fg-bright);
+    word-break: break-all;
+  }
+
+  .confirm-readme {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius);
+    font-size: 13px;
+    line-height: 1.6;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    color: var(--fg);
+  }
+
+  .confirm-readme-label {
+    font-size: 13px;
+    color: var(--fg-muted);
+    margin-top: 16px;
+    margin-bottom: 6px;
+  }
+
+  /* ── Buttons ── */
+  .btn-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 28px;
+    gap: 12px;
+  }
+
+  .btn {
+    padding: 8px 20px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--fg);
+    transition: all 0.1s;
+  }
+
+  .btn:hover { background: var(--bg-hover); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+  /* ── Result ── */
+  .result-panel {
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  .result-icon { font-size: 56px; margin-bottom: 16px; }
+  .result-title { font-size: 20px; font-weight: 600; color: var(--fg-bright); margin-bottom: 8px; }
+  .result-msg { font-size: 14px; color: var(--fg-muted); }
+
+  .upload-progress {
+    width: 100%;
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    margin-top: 16px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .upload-progress .bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0;
+    transition: width 0.3s;
+  }
+
+  .upload-progress.active { display: block; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .form-row { grid-template-columns: 1fr; }
+    .step-item span { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Publish Resource</h1>
+  <p class="subtitle">Upload and publish a resource to ToolHub</p>
+
+  <!-- Step Indicator -->
+  <div class="steps">
+    <div class="step-item active" data-step="1">
+      <div class="step-num">1</div>
+      <span>Upload</span>
+    </div>
+    <div class="step-line" data-line="1"></div>
+    <div class="step-item" data-step="2">
+      <div class="step-num">2</div>
+      <span>Info</span>
+    </div>
+    <div class="step-line" data-line="2"></div>
+    <div class="step-item" data-step="3">
+      <div class="step-num">3</div>
+      <span>Confirm</span>
+    </div>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="panel active" id="step1">
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">📦</div>
+      <div class="drop-text">Drag & drop file here, or <strong>click to browse</strong></div>
+      <div class="drop-hint">.vsix · .zip · SKILL.md · *.agent.md · *.instructions.md · *.prompt.md</div>
+    </div>
+    <input type="file" id="fileInput" accept=".vsix,.zip,.md" hidden>
+
+    <div class="file-info" id="fileInfo" style="display:none">
+      <div class="file-info-icon">📄</div>
+      <div>
+        <div class="file-info-name" id="fileName"></div>
+        <div class="file-info-size" id="fileSize"></div>
+      </div>
+      <button class="file-info-remove" id="removeFile" title="Remove">×</button>
+    </div>
+
+    <div class="token-group">
+      <label for="tokenInput">Publish Token</label>
+      <input type="password" id="tokenInput" placeholder="Leave empty if not required">
+      <div class="hint">Required only if server has PUBLISH_TOKEN configured</div>
+    </div>
+
+    <div class="btn-row">
+      <div></div>
+      <button class="btn btn-primary" id="btnNext1" disabled>Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Metadata -->
+  <div class="panel" id="step2">
+    <div class="parsing-status" id="parseStatus">
+      <div class="spinner"></div>
+      Parsing file metadata...
+    </div>
+
+    <div id="metaForm" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="metaType">Type</label>
+          <select id="metaType">
+            <option value="skill">Skill</option>
+            <option value="agent">Agent</option>
+            <option value="instruction">Instruction</option>
+            <option value="extension">Extension</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="metaVersion">Version</label>
+          <input type="text" id="metaVersion" placeholder="1.0.0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="metaName">Name (ID)</label>
+        <input type="text" id="metaName" placeholder="kebab-case-id">
+      </div>
+
+      <div class="form-group">
+        <label for="metaDisplayName">Display Name</label>
+        <input type="text" id="metaDisplayName" placeholder="Human Readable Name">
+      </div>
+
+      <div class="form-group">
+        <label for="metaDescription">Description</label>
+        <input type="text" id="metaDescription" placeholder="One line description">
+      </div>
+
+      <div class="form-group">
+        <label>Tags</label>
+        <div class="tag-input-wrap" id="tagWrap">
+          <input type="text" id="tagInput" placeholder="Type and press Enter">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="metaReadme">README (Markdown)</label>
+        <textarea id="metaReadme" class="readme-editor" placeholder="Write your resource documentation here..."></textarea>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="btnBack2">← Back</button>
+      <button class="btn btn-primary" id="btnNext2" disabled>Next →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Confirm -->
+  <div class="panel" id="step3">
+    <div class="confirm-card">
+      <div class="confirm-row">
+        <div class="confirm-label">File</div>
+        <div class="confirm-value" id="confFile"></div>
+      </div>
+      <div class="confirm-row">
+        <div class="confirm-label">Type</div>
+        <div class="confirm-value" id="confType"></div>
+      </div>
+      <div class="confirm-row">
+        <div class="confirm-label">Name</div>
+        <div class="confirm-value" id="confName"></div>
+      </div>
+      <div class="confirm-row">
+        <div class="confirm-label">Display Name</div>
+        <div class="confirm-value" id="confDisplayName"></div>
+      </div>
+      <div class="confirm-row">
+        <div class="confirm-label">Version</div>
+        <div class="confirm-value" id="confVersion"></div>
+      </div>
+      <div class="confirm-row">
+        <div class="confirm-label">Description</div>
+        <div class="confirm-value" id="confDescription"></div>
+      </div>
+      <div class="confirm-row">
+        <div class="confirm-label">Tags</div>
+        <div class="confirm-value" id="confTags"></div>
+      </div>
+    </div>
+
+    <div class="confirm-readme-label">README Preview</div>
+    <div class="confirm-readme" id="confReadme"></div>
+
+    <div class="upload-progress" id="uploadProgress">
+      <div class="bar" id="uploadBar"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" id="btnBack3">← Back</button>
+      <button class="btn btn-primary" id="btnPublish">Publish</button>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="panel" id="stepResult">
+    <div class="result-panel">
+      <div class="result-icon" id="resultIcon">✅</div>
+      <div class="result-title" id="resultTitle">Published!</div>
+      <div class="result-msg" id="resultMsg"></div>
+    </div>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn btn-primary" id="btnAgain">Publish Another</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin
+let selectedFile = null
+let tempId = null
+let tags = []
+
+// ── Elements ──
+const dropZone = document.getElementById('dropZone')
+const fileInput = document.getElementById('fileInput')
+const fileInfo = document.getElementById('fileInfo')
+const fileName = document.getElementById('fileName')
+const fileSize = document.getElementById('fileSize')
+const removeFile = document.getElementById('removeFile')
+const tokenInput = document.getElementById('tokenInput')
+const btnNext1 = document.getElementById('btnNext1')
+
+const parseStatus = document.getElementById('parseStatus')
+const metaForm = document.getElementById('metaForm')
+const metaType = document.getElementById('metaType')
+const metaVersion = document.getElementById('metaVersion')
+const metaName = document.getElementById('metaName')
+const metaDisplayName = document.getElementById('metaDisplayName')
+const metaDescription = document.getElementById('metaDescription')
+const tagInput = document.getElementById('tagInput')
+const tagWrap = document.getElementById('tagWrap')
+const metaReadme = document.getElementById('metaReadme')
+const btnBack2 = document.getElementById('btnBack2')
+const btnNext2 = document.getElementById('btnNext2')
+
+const btnBack3 = document.getElementById('btnBack3')
+const btnPublish = document.getElementById('btnPublish')
+const uploadProgress = document.getElementById('uploadProgress')
+const uploadBar = document.getElementById('uploadBar')
+
+const btnAgain = document.getElementById('btnAgain')
+
+// ── Step Navigation ──
+function setStep(n) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
+  document.getElementById(n === 'result' ? 'stepResult' : `step${n}`).classList.add('active')
+
+  document.querySelectorAll('.step-item').forEach(el => {
+    const s = parseInt(el.dataset.step)
+    el.classList.remove('active', 'completed')
+    if (s === n) el.classList.add('active')
+    else if (s < n) el.classList.add('completed')
+  })
+
+  document.querySelectorAll('.step-line').forEach(el => {
+    const l = parseInt(el.dataset.line)
+    el.classList.toggle('completed', l < n)
+  })
+}
+
+// ── File Selection ──
+dropZone.addEventListener('click', () => fileInput.click())
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault()
+  dropZone.classList.add('dragover')
+})
+
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('dragover')
+})
+
+dropZone.addEventListener('drop', e => {
+  e.preventDefault()
+  dropZone.classList.remove('dragover')
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0])
+})
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0])
+})
+
+function handleFile(file) {
+  selectedFile = file
+  fileName.textContent = file.name
+  fileSize.textContent = formatSize(file.size)
+  dropZone.classList.add('has-file')
+  fileInfo.style.display = 'flex'
+  btnNext1.disabled = false
+}
+
+removeFile.addEventListener('click', () => {
+  selectedFile = null
+  fileInput.value = ''
+  dropZone.classList.remove('has-file')
+  fileInfo.style.display = 'none'
+  btnNext1.disabled = true
+})
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / 1048576).toFixed(1) + ' MB'
+}
+
+// ── Step 1 → 2: Upload & Parse ──
+btnNext1.addEventListener('click', async () => {
+  if (!selectedFile) return
+
+  btnNext1.disabled = true
+  btnNext1.textContent = 'Uploading...'
+
+  try {
+    // Upload to temp
+    const formData = new FormData()
+    formData.append('file', selectedFile)
+    const uploadRes = await fetch(`${API}/api/upload-temp`, { method: 'POST', body: formData })
+    const uploadData = await uploadRes.json()
+
+    if (!uploadRes.ok || !uploadData.data) {
+      throw new Error(uploadData.error || 'Upload failed')
+    }
+
+    tempId = uploadData.data.tempId
+
+    // Parse metadata
+    setStep(2)
+    parseStatus.className = 'parsing-status'
+    parseStatus.innerHTML = '<div class="spinner"></div> Parsing file metadata...'
+    parseStatus.style.display = 'flex'
+    metaForm.style.display = 'none'
+    btnNext2.disabled = true
+
+    const parseRes = await fetch(`${API}/api/parse-temp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tempId })
+    })
+    const parseData = await parseRes.json()
+
+    if (!parseRes.ok || !parseData.data) {
+      throw new Error(parseData.error || 'Parse failed')
+    }
+
+    // Fill form with parsed data
+    const d = parseData.data
+    metaType.value = d.type || 'skill'
+    metaName.value = d.name || ''
+    metaVersion.value = d.version || '0.0.0'
+    metaDisplayName.value = d.displayName || d.name || ''
+    metaDescription.value = d.description || ''
+    metaReadme.value = d.readme || ''
+    tags = d.tags || []
+    renderTags()
+
+    parseStatus.className = 'parsing-status success'
+    parseStatus.innerHTML = '✓ Metadata parsed successfully'
+    metaForm.style.display = 'block'
+    btnNext2.disabled = false
+
+    // Auto-hide parse status after 3s
+    setTimeout(() => { parseStatus.style.display = 'none' }, 3000)
+
+  } catch (err) {
+    parseStatus.className = 'parsing-status error'
+    parseStatus.innerHTML = `✗ ${err.message}`
+    metaForm.style.display = 'block'
+    btnNext2.disabled = false
+  } finally {
+    btnNext1.disabled = false
+    btnNext1.textContent = 'Next →'
+  }
+})
+
+// ── Tags ──
+function renderTags() {
+  tagWrap.querySelectorAll('.tag-chip').forEach(c => c.remove())
+  tags.forEach((t, i) => {
+    const chip = document.createElement('span')
+    chip.className = 'tag-chip'
+    chip.innerHTML = `${escHtml(t)}<button data-i="${i}">×</button>`
+    chip.querySelector('button').addEventListener('click', () => {
+      tags.splice(i, 1)
+      renderTags()
+    })
+    tagWrap.insertBefore(chip, tagInput)
+  })
+}
+
+tagInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const val = tagInput.value.trim()
+    if (val && !tags.includes(val)) {
+      tags.push(val)
+      renderTags()
+    }
+    tagInput.value = ''
+  }
+  if (e.key === 'Backspace' && !tagInput.value && tags.length) {
+    tags.pop()
+    renderTags()
+  }
+})
+
+tagWrap.addEventListener('click', () => tagInput.focus())
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// ── Step 2 → 3: Confirm ──
+btnNext2.addEventListener('click', () => {
+  setStep(3)
+  document.getElementById('confFile').textContent = selectedFile?.name || ''
+  document.getElementById('confType').textContent = metaType.value
+  document.getElementById('confName').textContent = metaName.value
+  document.getElementById('confDisplayName').textContent = metaDisplayName.value
+  document.getElementById('confVersion').textContent = metaVersion.value
+  document.getElementById('confDescription').textContent = metaDescription.value
+  document.getElementById('confTags').textContent = tags.join(', ') || '(none)'
+  document.getElementById('confReadme').textContent = metaReadme.value || '(empty)'
+})
+
+// ── Back Buttons ──
+btnBack2.addEventListener('click', () => setStep(1))
+btnBack3.addEventListener('click', () => setStep(2))
+
+// ── Publish ──
+btnPublish.addEventListener('click', async () => {
+  btnPublish.disabled = true
+  uploadProgress.classList.add('active')
+  uploadBar.style.width = '30%'
+
+  try {
+    const body = {
+      tempId,
+      fileName: selectedFile?.name,
+      type: metaType.value,
+      name: metaName.value,
+      version: metaVersion.value,
+      displayName: metaDisplayName.value,
+      description: metaDescription.value,
+      tags,
+      readme: metaReadme.value,
+    }
+
+    uploadBar.style.width = '60%'
+
+    const headers = { 'Content-Type': 'application/json' }
+    const token = tokenInput.value.trim()
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const res = await fetch(`${API}/api/publish`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    })
+
+    uploadBar.style.width = '100%'
+    const data = await res.json()
+
+    if (!res.ok) throw new Error(data.error || 'Publish failed')
+
+    // Success
+    setStep('result')
+    document.getElementById('resultIcon').textContent = '✅'
+    document.getElementById('resultTitle').textContent = 'Published!'
+    document.getElementById('resultMsg').textContent = data.message || `Successfully published ${body.name}`
+
+  } catch (err) {
+    setStep('result')
+    document.getElementById('resultIcon').textContent = '❌'
+    document.getElementById('resultTitle').textContent = 'Publish Failed'
+    document.getElementById('resultMsg').textContent = err.message
+  } finally {
+    btnPublish.disabled = false
+    uploadProgress.classList.remove('active')
+    uploadBar.style.width = '0'
+  }
+})
+
+// ── Publish Another ──
+btnAgain.addEventListener('click', () => {
+  selectedFile = null
+  tempId = null
+  tags = []
+  fileInput.value = ''
+  dropZone.classList.remove('has-file')
+  fileInfo.style.display = 'none'
+  btnNext1.disabled = true
+  tokenInput.value = ''
+  metaForm.style.display = 'none'
+  renderTags()
+  setStep(1)
+})
+</script>
+
+</body>
+</html>

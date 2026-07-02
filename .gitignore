@@ -28,3 +28,5 @@ server/data/catalog.json
 
 # Extension packaging
 *.vsix
+
+tmp/

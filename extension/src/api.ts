@@ -1,4 +1,4 @@
-import type { ResourceMeta, ApiResponse, UpdateCheckResult } from './types'
+import type { ResourceMeta, ApiResponse, UpdateCheckResult, ResourceDetail } from './types'
 
 async function request<T>(baseUrl: string, path: string, options?: RequestInit): Promise<T> {
   const url = `${baseUrl.replace(/\/+$/, '')}${path}`
@@ -57,4 +57,37 @@ export async function publishResource(
 
 export function getDownloadUrl(baseUrl: string, type: string, id: string, version: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/api/download/${type}/${id}/${version}`
+}
+
+export async function fetchResourceDetail(
+  baseUrl: string,
+  type: string,
+  name: string,
+  userId?: string
+): Promise<ResourceDetail> {
+  const params = userId ? `?userId=${encodeURIComponent(userId)}` : ''
+  return request<ResourceDetail>(baseUrl, `/api/resource/${type}/${name}${params}`)
+}
+
+export async function submitRating(
+  baseUrl: string,
+  type: string,
+  name: string,
+  score: number,
+  userId: string
+): Promise<{ avgRating: number; ratingCount: number; userScore: number; distribution: Record<number, number> }> {
+  return request(baseUrl, '/api/rate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, name, score, userId }),
+  })
+}
+
+export async function fetchReadme(
+  baseUrl: string,
+  type: string,
+  name: string
+): Promise<string> {
+  const result = await request<{ readme: string }>(baseUrl, `/api/resource/${type}/${name}/readme`)
+  return result.readme
 }
