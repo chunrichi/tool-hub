@@ -1,19 +1,6 @@
 import * as vscode from 'vscode'
-import type { ResourceItem, ContentType } from '../types'
-
-const TYPE_ICONS: Record<ContentType, string> = {
-  extension: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`,
-  skill: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.5 4.5-3 6s-2 3-2 5h-4c0-2-.5-3.5-2-5s-3-3.5-3-6a7 7 0 0 1 7-7z"/><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/></svg>`,
-  agent: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>`,
-  instruction: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
-}
-
-const TYPE_COLORS: Record<ContentType, string> = {
-  extension: '#007acc',
-  skill: '#cca700',
-  agent: '#4ec9b0',
-  instruction: '#b180d7',
-}
+import type { ResourceItem } from '../types'
+import { TYPE_ICONS_48, TYPE_COLORS, getNonce } from './constants'
 
 export class SidebarView implements vscode.WebviewViewProvider {
   public static readonly viewType = 'toolhubSidebar'
@@ -102,7 +89,7 @@ export class SidebarView implements vscode.WebviewViewProvider {
 
   private _getHtml(): string {
     const nonce = getNonce()
-    const iconSvgs = JSON.stringify(TYPE_ICONS)
+    const iconSvgs = JSON.stringify(TYPE_ICONS_48)
     const typeColors = JSON.stringify(TYPE_COLORS)
 
     return `<!DOCTYPE html>
@@ -417,11 +404,4 @@ export class SidebarView implements vscode.WebviewViewProvider {
   }
 }
 
-function getNonce(): string {
-  var text = ''
-  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  for (var i = 0; i < 32; i++) {
-    text += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return text
-}
+
