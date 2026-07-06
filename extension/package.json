@@ -47,11 +47,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "toolhub.filter",
-        "title": "Filter",
-        "icon": "$(search)"
-      },
-      {
         "command": "toolhub.install",
         "title": "Install",
         "icon": "$(cloud-download)"
@@ -92,14 +87,9 @@
     "menus": {
       "view/title": [
         {
-          "command": "toolhub.filter",
-          "when": "view == toolhubSidebar",
-          "group": "navigation@1"
-        },
-        {
           "command": "toolhub.refresh",
           "when": "view == toolhubSidebar",
-          "group": "navigation@2"
+          "group": "navigation@1"
         },
         {
           "command": "toolhub.manageRegistries",

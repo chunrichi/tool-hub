@@ -18,22 +18,6 @@ export function registerCommands(
     vscode.commands.registerCommand('toolhub.refresh', () => refreshAll())
   )
 
-  // ── Filter ──
-  context.subscriptions.push(
-    vscode.commands.registerCommand('toolhub.filter', async () => {
-      const input = vscode.window.createInputBox()
-      input.title = 'Search ToolHub'
-      input.placeholder = 'Filter resources... (@installed, @available, @updatable, @ext:skill)'
-      input.value = ''
-      input.onDidChangeValue((text) => {
-        sidebarView.setItems(getCurrentItems())
-      })
-      input.onDidAccept(() => input.hide())
-      input.onDidHide(() => sidebarView.setItems(getCurrentItems()))
-      input.show()
-    })
-  )
-
   // ── Install ──
   context.subscriptions.push(
     vscode.commands.registerCommand('toolhub.install', async (item?: ResourceItem) => {
