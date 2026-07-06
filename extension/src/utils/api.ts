@@ -1,4 +1,4 @@
-import type { ResourceMeta, ApiResponse, UpdateCheckResult, ResourceDetail } from './types'
+import type { ResourceMeta, ApiResponse, UpdateCheckResult, ResourceDetail } from '../types'
 
 async function request<T>(baseUrl: string, path: string, options?: RequestInit): Promise<T> {
   const url = `${baseUrl.replace(/\/+$/, '')}${path}`

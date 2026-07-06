@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import type { ResourceItem } from './types'
+import type { ResourceItem } from '../types'
 
 const STATUS_BADGES: Record<string, { badge: string; color: string; tooltip: string }> = {
   installed: { badge: '\u2713', color: 'testing.iconPassed', tooltip: 'Installed - up to date' },

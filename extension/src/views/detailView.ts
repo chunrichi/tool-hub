@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { marked } from 'marked'
-import type { ResourceItem, ContentType, ResourceDetail } from './types'
-import { fetchResourceDetail, submitRating, fetchReadme } from './api'
+import type { ResourceItem, ContentType, ResourceDetail } from '../types'
+import { fetchResourceDetail, submitRating, fetchReadme } from '../utils/api'
 
 const TYPE_SVGS: Record<ContentType, string> = {
   extension: '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',

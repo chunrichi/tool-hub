@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import type { ResourceItem, ContentType, InstallStatus } from './types'
+import type { ResourceItem, ContentType, InstallStatus } from '../types'
 
 // ── Type icons (standard VS Code ThemeIcon IDs) ─────────────
 const TYPE_ICONS: Record<ContentType, string> = {

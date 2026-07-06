@@ -3,10 +3,10 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import JSZip from 'jszip'
-import type { ResourceItem, ResourceMeta, InstallStatus, ContentType } from './types'
-import { getRegistries } from './config'
-import { fetchCatalog, checkUpdates } from './api'
-import { log } from './logger'
+import type { ResourceItem, ResourceMeta, InstallStatus, ContentType } from '../types'
+import { getRegistries } from '../config'
+import { fetchCatalog, checkUpdates } from '../utils/api'
+import { log } from '../utils/logger'
 
 export async function loadResources(): Promise<ResourceItem[]> {
   const registries = getRegistries()

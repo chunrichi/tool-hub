@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
-import { publishResource } from './api'
-import { getRegistries } from './config'
+import { publishResource } from '../utils/api'
+import { getRegistries } from '../config'
 
 export class PublishView {
   private static panel: vscode.WebviewPanel | undefined

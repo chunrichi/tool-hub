@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
-import type { Registry } from './types'
-import { getRegistries, saveRegistries } from './config'
+import type { Registry } from '../types'
+import { getRegistries, saveRegistries } from '../config'
 
 export class RegistryView {
   private static panel: vscode.WebviewPanel | undefined

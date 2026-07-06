@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { getUpdateInterval } from './config'
+import { getUpdateInterval } from '../config'
 
 export function startUpdateChecker(
   callback: () => Promise<void>
