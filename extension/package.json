@@ -92,6 +92,11 @@
           "group": "navigation@1"
         },
         {
+          "command": "toolhub.publish",
+          "when": "view == toolhubSidebar",
+          "group": "navigation@2"
+        },
+        {
           "command": "toolhub.manageRegistries",
           "when": "view == toolhubSidebar",
           "group": "navigation@3"
