@@ -40,6 +40,11 @@ async function main() {
   // Routes
   app.use('/api', apiRouter)
 
+  // Homepage
+  app.get('/', (_req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'))
+  })
+
   // Upload page
   app.get('/upload', (_req, res) => {
     res.sendFile(path.join(publicDir, 'upload.html'))
